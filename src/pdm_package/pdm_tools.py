@@ -5,7 +5,7 @@ import struct
 from msal_extensions import *
 import pandas as pd
 
-def pdm_query(shortname, sql):
+def query(shortname, sql):
 
     username = shortname.upper()+'@equinor.com' #SHORTNAME@equinor.com -- short name should be in Capital
     tenantID = '3aa4a235-b6e2-48d5-9195-7fcf05b459b0'

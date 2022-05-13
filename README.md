@@ -12,7 +12,7 @@ This is a simple tool package for querying data from [Production Data Mart](http
 3. To query PDM and retrieve data:<br>
     ```
     sql = 'SELECT TOP(1) * FROM PDMVW.WELL_PROD_DAY'
-    df = tools.query('shortname', sql)
+    df = tools.query('YourShortname', sql)
     
     print (df)
     ```

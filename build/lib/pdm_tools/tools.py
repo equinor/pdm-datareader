@@ -60,7 +60,7 @@ def query(shortname, sql):
             SQL_COPT_SS_ACCESS_TOKEN = 1256 
             server = 'pdmprod.database.windows.net'
             database="pdm"
-            driver = 'ODBC Driver 17 for SQL Server'
+            driver = 'ODBC Driver 18 for SQL Server'
             connection_string = 'DRIVER='+driver+';SERVER='+server+';DATABASE='+database
 
             #get bytes from token obtained

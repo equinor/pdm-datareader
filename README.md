@@ -6,7 +6,6 @@ This is a simple tool package for querying data from [Production Data Mart](http
 ## Usage
 1. From the python environment you want to install the package in, run:<br>
     ```pip install git+https://github.com/equinor/pdm-tools.git```<br>
-    ```pip install pandas```
 2. To import the installed module in your python file(s):<br>
     ```from pdm_tools import tools```<br>
 3. To query PDM and retrieve data:<br>

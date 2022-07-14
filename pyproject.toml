@@ -1,3 +1,10 @@
 [build-system]
-requires = ["setuptools>=42"]
+requires = [
+    "setuptools>=42",
+    "wheel",
+    "msal",
+    "pyodbc",
+    "msal_extensions",
+    "pandas"
+]
 build-backend = "setuptools.build_meta"

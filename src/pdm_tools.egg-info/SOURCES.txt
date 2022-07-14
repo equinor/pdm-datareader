@@ -7,4 +7,5 @@ src/pdm_tools/tools.py
 src/pdm_tools.egg-info/PKG-INFO
 src/pdm_tools.egg-info/SOURCES.txt
 src/pdm_tools.egg-info/dependency_links.txt
+src/pdm_tools.egg-info/requires.txt
 src/pdm_tools.egg-info/top_level.txt

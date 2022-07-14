@@ -1,0 +1,4 @@
+msal
+pyodbc
+msal_extensions~=0.3.0
+pandas

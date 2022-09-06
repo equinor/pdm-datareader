@@ -1,5 +1,6 @@
 import struct
 import sys
+from typing import Any, List, Optional
 
 import msal
 import pandas as pd
@@ -9,11 +10,8 @@ from msal_extensions import *
 from pdm_tools.utils import get_login_name
 
 
-def query(sql, short_name=None):
-    if short_name is None:
-        short_name = get_login_name()
-
-    # SHORTNAME@equinor.com -- short name should be in Capital
+def query(sql: str, params: Optional[List[Any]] = None, short_name: Optional[str] = get_login_name()):
+    # SHORTNAME@equinor.com -- short name shall be capitalized
     username = short_name.upper()+'@equinor.com'
     tenantID = '3aa4a235-b6e2-48d5-9195-7fcf05b459b0'
     authority = 'https://login.microsoftonline.com/' + tenantID
@@ -126,5 +124,5 @@ def query(sql, short_name=None):
 
             # for i in cursor:
             #    print(i)
-            df = pd.read_sql(sql, conn)
+            df = pd.read_sql(sql, conn, params=params)
             return df

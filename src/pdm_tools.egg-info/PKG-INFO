@@ -5,9 +5,7 @@ Summary: A small python package to execute queries to PDM without having to re-a
 Home-page: https://github.com/equinor/pdm-tools
 Author: Chinazor Allen
 Author-email: chial@equinor.com
-License: UNKNOWN
 Project-URL: Bug Tracker, https://github.com/equinor/pdm-tools/issues
-Platform: UNKNOWN
 Classifier: Programming Language :: Python :: 3
 Classifier: License :: OSI Approved :: MIT License
 Classifier: Operating System :: OS Independent
@@ -23,7 +21,6 @@ This is a simple tool package for querying data from [Production Data Mart](http
 ## Usage
 1. From the python environment you want to install the package in, run:<br>
     ```pip install git+https://github.com/equinor/pdm-tools.git```<br>
-    ```pip install pandas```
 2. To import the installed module in your python file(s):<br>
     ```from pdm_tools import tools```<br>
 3. To query PDM and retrieve data:<br>
@@ -33,6 +30,4 @@ This is a simple tool package for querying data from [Production Data Mart](http
     
     print (df)
     ```
-
-
 

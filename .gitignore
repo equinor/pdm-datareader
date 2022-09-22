@@ -54,3 +54,6 @@ token_cache.bin
 
 # SNYK
 .dccache
+
+# Pycharm
+.idea

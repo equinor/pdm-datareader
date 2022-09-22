@@ -10,7 +10,10 @@ from msal_extensions import *
 from pdm_tools.utils import get_login_name
 
 
-def query(sql: str, params: Optional[List[Any]] = None, short_name: Optional[str] = get_login_name()):
+def query(sql: str,
+          params: Optional[List[Any]] = None,
+          short_name: Optional[str] = get_login_name(),
+          verbose: Optional[bool] = True):
     # SHORTNAME@equinor.com -- short name shall be capitalized
     username = short_name.upper()+'@equinor.com'
     tenantID = '3aa4a235-b6e2-48d5-9195-7fcf05b459b0'
@@ -33,8 +36,9 @@ def query(sql: str, params: Optional[List[Any]] = None, short_name: Optional[str
     def msal_cache_accounts(clientID, authority):
         # Accounts
         persistence = msal_persistence("token_cache.bin")
-        print("Is this MSAL persistence cache encrypted?",
-              persistence.is_encrypted)
+        if verbose:
+            print("Is this MSAL persistence cache encrypted?",
+                  persistence.is_encrypted)
         cache = PersistedTokenCache(persistence)
 
         app = msal.PublicClientApplication(
@@ -80,7 +84,8 @@ def query(sql: str, params: Optional[List[Any]] = None, short_name: Optional[str
                 exptoken += bytes(1)
 
             tokenstruct = struct.pack("=i", len(exptoken)) + exptoken
-            print('Connecting to Database')
+            if verbose:
+                print('Connecting to Database')
             conn = pyodbc.connect(connection_string, attrs_before={
                                   SQL_COPT_SS_ACCESS_TOKEN: tokenstruct})
 
@@ -93,21 +98,23 @@ def query(sql: str, params: Optional[List[Any]] = None, short_name: Optional[str
         for account in accounts:
             if account['username'] == username:
                 myAccount = account
-                print("Found account in MSAL Cache: " + account['username'])
-                print("Attempting to obtain a new Access Token using the Refresh Token")
+                if verbose:
+                    print("Found account in MSAL Cache: " + account['username'])
+                    print("Attempting to obtain a new Access Token using the Refresh Token")
                 result = msal_delegated_refresh(
                     clientID, scopes, authority, myAccount)
 
                 if result is None:
                     # Get a new Access Token using the Interactive Flow
-                    print(
-                        "Interactive Authentication required to obtain a new Access Token.")
+                    if verbose:
+                        print("Interactive Authentication required to obtain a new Access Token.")
                     result = msal_delegated_interactive_flow(
                         scopes=scopes, domain_hint=tenantID)
     else:
         # No accounts found in the local MSAL Cache
         # Trigger interactive authentication flow
-        print("First authentication")
+        if verbose:
+            print("First authentication")
         result = msal_delegated_interactive_flow(
             scopes=scopes, domain_hint=tenantID)
         idTokenClaims = result['id_token_claims']
@@ -118,11 +125,12 @@ def query(sql: str, params: Optional[List[Any]] = None, short_name: Optional[str
             connect_to_db(result)
 
             #  Query Database
-            print('Querying database')
-            #cursor = conn.cursor()
-            #cursor.execute('SELECT top 1 * FROM [PDMVW].wb_prod_day')
+            if verbose:
+                print('Querying database')
 
-            # for i in cursor:
-            #    print(i)
             df = pd.read_sql(sql, conn, params=params)
             return df
+    else:
+        print(f'Received no data. '
+              f'This may be due to the account retrieved not having sufficient access or not existing. '
+              f'The shortname used was: {short_name} ')

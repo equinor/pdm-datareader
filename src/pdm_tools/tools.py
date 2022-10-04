@@ -89,6 +89,12 @@ def query(sql: str,
             conn = pyodbc.connect(connection_string, attrs_before={
                                   SQL_COPT_SS_ACCESS_TOKEN: tokenstruct})
 
+        except pyodbc.ProgrammingError as pe:
+            if "(40615) (SQLDriverConnect)" in repr(pe):
+                print(
+                    "Fails connect to pdm database in azure from outside Equinor network")
+                raise
+            print('Connection to db : ', err)
         except Exception as err:
             print('Connection to db : ', err)
 

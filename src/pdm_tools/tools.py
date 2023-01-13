@@ -88,9 +88,24 @@ def query(sql: str,
                 print('Connecting to Database')
             conn = pyodbc.connect(connection_string, attrs_before={
                                   SQL_COPT_SS_ACCESS_TOKEN: tokenstruct})
-
+        except pyodbc.ProgrammingError as pe:
+            if "(40615) (SQLDriverConnect)" in repr(pe):
+                if verbose:
+                    print(
+                        "Fails connecting from current IP-address. Are you on Equinor network?")
+                raise
+            if verbose:
+                print('Connection to db failed: ', err)
+        except pyodbc.InterfaceError as pe:
+            if "(18456) (SQLDriverConnect)" in repr(pe):
+                if verbose:
+                    print("Login using token failed. Do you have access?")
+                raise
+            if verbose:
+                print('Connection to db failed: ', err)
         except Exception as err:
-            print('Connection to db : ', err)
+            if verbose:
+                print('Connection to db failed: ', err)
 
     accounts = msal_cache_accounts(clientID, authority)
 

@@ -73,8 +73,10 @@ def query(sql: str,
             SQL_COPT_SS_ACCESS_TOKEN = 1256
             server = 'pdmprod.database.windows.net'
             database = "pdm"
-            driver = 'ODBC Driver 18 for SQL Server'
+            driver = 'ODBC Driver 18 for SQL Server'  # Primary driver if available
+            driver_fallback = 'ODBC Driver 17 for SQL Server'  # Fallback driver if available
             connection_string = 'DRIVER='+driver+';SERVER='+server+';DATABASE='+database
+            connection_string_fallback = 'DRIVER='+driver_fallback+';SERVER='+server+';DATABASE='+database
 
             # get bytes from token obtained
             tokenb = bytes(result['access_token'], 'UTF-8')
@@ -95,14 +97,17 @@ def query(sql: str,
                         "Fails connecting from current IP-address. Are you on Equinor network?")
                 raise
             if verbose:
-                print('Connection to db failed: ', err)
+                print('Connection to db failed: ', repr(pe))
         except pyodbc.InterfaceError as pe:
+            if "no default driver specified" in repr(pe):
+                conn = pyodbc.connect(connection_string_fallback, attrs_before={
+                                  SQL_COPT_SS_ACCESS_TOKEN: tokenstruct})
             if "(18456) (SQLDriverConnect)" in repr(pe):
                 if verbose:
                     print("Login using token failed. Do you have access?")
                 raise
             if verbose:
-                print('Connection to db failed: ', err)
+                print('Connection to db failed: ', repr(pe))
         except Exception as err:
             if verbose:
                 print('Connection to db failed: ', err)

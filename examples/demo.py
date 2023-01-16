@@ -12,5 +12,5 @@ df = tools.query(sql, params=["NO", dt.datetime(
 print(df)
 
 sql = 'SELECT TOP(1) * FROM PDMVW.WELL_PROD_DAY'
-df = tools.query(sql, short_name='yourshortname')
+df = tools.query(sql)
 print(df)

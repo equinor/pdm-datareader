@@ -75,8 +75,8 @@ def query(sql: str,
             database = "pdm"
             driver = 'ODBC Driver 18 for SQL Server'  # Primary driver if available
             driver_fallback = 'ODBC Driver 17 for SQL Server'  # Fallback driver if available
-            connection_string = 'DRIVER='+driver+';SERVER='+server+';DATABASE='+database
-            connection_string_fallback = 'DRIVER='+driver_fallback+';SERVER='+server+';DATABASE='+database
+            connection_string = f"DRIVER={driver};SERVER={server};DATABASE={database}"
+            connection_string_fallback = f"DRIVER={driver_fallback};SERVER={server};DATABASE={database}"
 
             # get bytes from token obtained
             tokenb = bytes(result['access_token'], 'UTF-8')
@@ -101,7 +101,7 @@ def query(sql: str,
         except pyodbc.InterfaceError as pe:
             if "no default driver specified" in repr(pe):
                 conn = pyodbc.connect(connection_string_fallback, attrs_before={
-                                  SQL_COPT_SS_ACCESS_TOKEN: tokenstruct})
+                    SQL_COPT_SS_ACCESS_TOKEN: tokenstruct})
             if "(18456) (SQLDriverConnect)" in repr(pe):
                 if verbose:
                     print("Login using token failed. Do you have access?")
@@ -110,7 +110,7 @@ def query(sql: str,
                 print('Connection to db failed: ', repr(pe))
         except Exception as err:
             if verbose:
-                print('Connection to db failed: ', err)
+                print('Connection to db failed: ', repr(err))
 
     accounts = msal_cache_accounts(clientID, authority)
 
@@ -119,15 +119,18 @@ def query(sql: str,
             if account['username'] == username:
                 myAccount = account
                 if verbose:
-                    print("Found account in MSAL Cache: " + account['username'])
-                    print("Attempting to obtain a new Access Token using the Refresh Token")
+                    print(
+                        f"Found account in MSAL Cache: {account['username']}")
+                    print(
+                        "Attempting to obtain a new Access Token using the Refresh Token")
                 result = msal_delegated_refresh(
                     clientID, scopes, authority, myAccount)
 
                 if result is None:
                     # Get a new Access Token using the Interactive Flow
                     if verbose:
-                        print("Interactive Authentication required to obtain a new Access Token.")
+                        print(
+                            "Interactive Authentication required to obtain a new Access Token.")
                     result = msal_delegated_interactive_flow(
                         scopes=scopes, domain_hint=tenantID)
     else:

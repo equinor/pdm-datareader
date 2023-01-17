@@ -1,6 +1,24 @@
+[tool.poetry]
+name = "pdm-tools"
+version = "2.1"
+description = "A small python package to execute queries to PDM without having to re-authenticate every time"
+authors = ["PDM TEAM <AWL@equinor.com>"]
+license = "MIT"
+readme = "README.md"
+packages = [{include = "pdm_tools"}]
+repository = "https://github.com/equinor/pdm-tools"
+classifiers = ["License :: OSI Approved :: MIT License","Operating System :: OS Independent"]
+
+[tool.poetry.dependencies]
+python = "^3.8,<4.0"
+msal = "^1.20.0"
+msal-extensions = "^0.3.1"
+pyodbc = "^4.0.35"
+pandas = "^1.5.2"
+
+[tool.poetry.group.dev.dependencies]
+autopep8 = "^2.0.1"
+
 [build-system]
-requires = [
-    "setuptools>=42",
-    "wheel"
-]
-build-backend = "setuptools.build_meta"
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

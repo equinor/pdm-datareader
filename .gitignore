@@ -57,3 +57,5 @@ token_cache.bin
 
 # Pycharm
 .idea
+
+.python-version

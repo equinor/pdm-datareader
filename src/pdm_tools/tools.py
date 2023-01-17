@@ -88,8 +88,22 @@ def query(sql: str,
             tokenstruct = struct.pack("=i", len(exptoken)) + exptoken
             if verbose:
                 print('Connecting to Database')
-            conn = pyodbc.connect(connection_string, attrs_before={
-                                  SQL_COPT_SS_ACCESS_TOKEN: tokenstruct})
+            try:
+                conn = pyodbc.connect(connection_string, attrs_before={
+                                      SQL_COPT_SS_ACCESS_TOKEN: tokenstruct})
+
+            except pyodbc.InterfaceError as pe:
+                if "no default driver specified" in repr(pe):
+                    conn = pyodbc.connect(connection_string_fallback, attrs_before={
+                        SQL_COPT_SS_ACCESS_TOKEN: tokenstruct})
+                else:
+                    raise
+            except pyodbc.Error as pe:
+                if "[unixODBC][Driver Manager]Can't open lib" in repr(pe):
+                    conn = pyodbc.connect(connection_string_fallback, attrs_before={
+                        SQL_COPT_SS_ACCESS_TOKEN: tokenstruct})
+                else:
+                    raise
         except pyodbc.ProgrammingError as pe:
             if "(40615) (SQLDriverConnect)" in repr(pe):
                 if verbose:
@@ -97,20 +111,17 @@ def query(sql: str,
                         "Fails connecting from current IP-address. Are you on Equinor network?")
                 raise
             if verbose:
-                print('Connection to db failed: ', repr(pe))
+                print('Connection to db failed: ', pe)
         except pyodbc.InterfaceError as pe:
-            if "no default driver specified" in repr(pe):
-                conn = pyodbc.connect(connection_string_fallback, attrs_before={
-                    SQL_COPT_SS_ACCESS_TOKEN: tokenstruct})
             if "(18456) (SQLDriverConnect)" in repr(pe):
                 if verbose:
                     print("Login using token failed. Do you have access?")
                 raise
             if verbose:
-                print('Connection to db failed: ', repr(pe))
+                print('Connection to db failed: ', pe)
         except Exception as err:
             if verbose:
-                print('Connection to db failed: ', repr(err))
+                print('Connection to db failed: ', err)
 
     accounts = msal_cache_accounts(clientID, authority)
 

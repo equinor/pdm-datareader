@@ -452,6 +452,32 @@ tests = ["coverage[toml] (==5.0.4)", "pytest (>=6.0.0,<7.0.0)"]
 
 [[package]]
 name = "pyodbc"
+version = "4.0.34"
+description = "DB API Module for ODBC"
+category = "main"
+optional = false
+python-versions = ">=2.7, !=3.0.*, !=3.1.*, !=3.2.*, !=3.3.*, !=3.4.*, !=3.5.*"
+files = [
+    {file = "pyodbc-4.0.34-cp310-cp310-macosx_10_9_x86_64.whl", hash = "sha256:07caafd49335e444f66d7ac78a87ffd1b8ce71d352b5bf0ffaa93d9ea82b003b"},
+    {file = "pyodbc-4.0.34-cp310-cp310-manylinux_2_24_x86_64.whl", hash = "sha256:9d8ca2122c2671264d53f0009e4c96b80b4da9bd44394e6ef6692b3aeb34be7c"},
+    {file = "pyodbc-4.0.34-cp310-cp310-win_amd64.whl", hash = "sha256:befe795303ff13d55fa15c42496aa414cd60f465e8d96daec8c9b48bfea2c1ec"},
+    {file = "pyodbc-4.0.34-cp36-cp36m-macosx_10_9_x86_64.whl", hash = "sha256:5502d98e7bb37d6407e97ecd9f6528e9512439c7c3ff6f444d8b4b59ebb5ef4b"},
+    {file = "pyodbc-4.0.34-cp36-cp36m-manylinux_2_24_x86_64.whl", hash = "sha256:5a400524ad64dcd242ea75070789696f7157e23597767340307494e4b85c5a8e"},
+    {file = "pyodbc-4.0.34-cp36-cp36m-win_amd64.whl", hash = "sha256:991c1441b5067e88c37f32eb79b4015fda6b5451b396187325ec594bd4d5ae74"},
+    {file = "pyodbc-4.0.34-cp37-cp37m-macosx_10_9_x86_64.whl", hash = "sha256:b80aee02983130cf0087234d226e2310b527d093402b60d307f2b90dc038ff65"},
+    {file = "pyodbc-4.0.34-cp37-cp37m-manylinux_2_24_x86_64.whl", hash = "sha256:9b2bb29121971b3316faeb2593e59f6f9faebd85048b4f0716b46c6282c1b9a8"},
+    {file = "pyodbc-4.0.34-cp37-cp37m-win_amd64.whl", hash = "sha256:2ad077231c6f33555abd6e482ce027739c54430b973477a42094fbae2f3d9791"},
+    {file = "pyodbc-4.0.34-cp38-cp38-macosx_10_9_x86_64.whl", hash = "sha256:5eda44df6c064d43075ced640d955399a663523028a847132a50fc02722c4904"},
+    {file = "pyodbc-4.0.34-cp38-cp38-manylinux_2_24_x86_64.whl", hash = "sha256:5e454fe5ac21d5a920e2d1f269c38e2af2d045ea97979951953f57f41ac8cea0"},
+    {file = "pyodbc-4.0.34-cp38-cp38-win_amd64.whl", hash = "sha256:c8d95528d0c33fb24d0928d8cfe7dd194f7406a3da9c4a73b6fcb203b66addd4"},
+    {file = "pyodbc-4.0.34-cp39-cp39-macosx_10_9_x86_64.whl", hash = "sha256:402e94519ee95ae7ce0a792fc37fc3922f8a970337edc873b03d64427815ac8f"},
+    {file = "pyodbc-4.0.34-cp39-cp39-manylinux_2_24_x86_64.whl", hash = "sha256:e8244184fd7b92cafbdb417709a214371fe489d6fed97e61d130ceb2891f5e52"},
+    {file = "pyodbc-4.0.34-cp39-cp39-win_amd64.whl", hash = "sha256:eb7a1a15eb35322e62bfb1c2910274106781edf4dc268ad2b0e9fc89958689e4"},
+    {file = "pyodbc-4.0.34.tar.gz", hash = "sha256:7ea7869532b96b8d529b1f08ea85765f94df7e4a58e968b2f8d455346a03e45c"},
+]
+
+[[package]]
+name = "pyodbc"
 version = "4.0.35"
 description = "DB API Module for ODBC"
 category = "main"
@@ -608,4 +634,4 @@ socks = ["PySocks (>=1.5.6,!=1.5.7,<2.0)"]
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.8,<4.0"
-content-hash = "a7a6d66277f5fa633fbe8a05e34829064dda4f4bd311196758105c70acc0e867"
+content-hash = "aad070f26253420e4d2741b7c01dd4b96bdb27635ec578f45e97b19380e6741d"

@@ -119,9 +119,11 @@ def query(sql: str,
                 raise
             if verbose:
                 print('Connection to db failed: ', pe)
+                raise
         except Exception as err:
             if verbose:
                 print('Connection to db failed: ', err)
+                raise
 
     accounts = msal_cache_accounts(clientID, authority)
 

@@ -73,8 +73,10 @@ def query(sql: str,
             SQL_COPT_SS_ACCESS_TOKEN = 1256
             server = 'pdmprod.database.windows.net'
             database = "pdm"
-            driver = 'ODBC Driver 18 for SQL Server'
-            connection_string = 'DRIVER='+driver+';SERVER='+server+';DATABASE='+database
+            driver = 'ODBC Driver 18 for SQL Server'  # Primary driver if available
+            driver_fallback = 'ODBC Driver 17 for SQL Server'  # Fallback driver if available
+            connection_string = f"DRIVER={driver};SERVER={server};DATABASE={database}"
+            connection_string_fallback = f"DRIVER={driver_fallback};SERVER={server};DATABASE={database}"
 
             # get bytes from token obtained
             tokenb = bytes(result['access_token'], 'UTF-8')
@@ -86,8 +88,22 @@ def query(sql: str,
             tokenstruct = struct.pack("=i", len(exptoken)) + exptoken
             if verbose:
                 print('Connecting to Database')
-            conn = pyodbc.connect(connection_string, attrs_before={
-                                  SQL_COPT_SS_ACCESS_TOKEN: tokenstruct})
+            try:
+                conn = pyodbc.connect(connection_string, attrs_before={
+                                      SQL_COPT_SS_ACCESS_TOKEN: tokenstruct})
+
+            except pyodbc.InterfaceError as pe:
+                if "no default driver specified" in repr(pe):
+                    conn = pyodbc.connect(connection_string_fallback, attrs_before={
+                        SQL_COPT_SS_ACCESS_TOKEN: tokenstruct})
+                else:
+                    raise
+            except pyodbc.Error as pe:
+                if "[unixODBC][Driver Manager]Can't open lib" in repr(pe):
+                    conn = pyodbc.connect(connection_string_fallback, attrs_before={
+                        SQL_COPT_SS_ACCESS_TOKEN: tokenstruct})
+                else:
+                    raise
         except pyodbc.ProgrammingError as pe:
             if "(40615) (SQLDriverConnect)" in repr(pe):
                 if verbose:
@@ -95,17 +111,19 @@ def query(sql: str,
                         "Fails connecting from current IP-address. Are you on Equinor network?")
                 raise
             if verbose:
-                print('Connection to db failed: ', err)
+                print('Connection to db failed: ', pe)
         except pyodbc.InterfaceError as pe:
             if "(18456) (SQLDriverConnect)" in repr(pe):
                 if verbose:
                     print("Login using token failed. Do you have access?")
                 raise
             if verbose:
-                print('Connection to db failed: ', err)
+                print('Connection to db failed: ', pe)
+                raise
         except Exception as err:
             if verbose:
                 print('Connection to db failed: ', err)
+                raise
 
     accounts = msal_cache_accounts(clientID, authority)
 
@@ -114,15 +132,18 @@ def query(sql: str,
             if account['username'] == username:
                 myAccount = account
                 if verbose:
-                    print("Found account in MSAL Cache: " + account['username'])
-                    print("Attempting to obtain a new Access Token using the Refresh Token")
+                    print(
+                        f"Found account in MSAL Cache: {account['username']}")
+                    print(
+                        "Attempting to obtain a new Access Token using the Refresh Token")
                 result = msal_delegated_refresh(
                     clientID, scopes, authority, myAccount)
 
                 if result is None:
                     # Get a new Access Token using the Interactive Flow
                     if verbose:
-                        print("Interactive Authentication required to obtain a new Access Token.")
+                        print(
+                            "Interactive Authentication required to obtain a new Access Token.")
                     result = msal_delegated_interactive_flow(
                         scopes=scopes, domain_hint=tenantID)
     else:

@@ -6,6 +6,8 @@ import msal
 import pandas as pd
 import pyodbc
 from msal_extensions import *
+from sqlalchemy.engine import URL
+from sqlalchemy import create_engine, text as sql_text
 
 from pdm_tools.utils import get_login_name
 
@@ -64,9 +66,29 @@ def query(sql: str,
         result = app.acquire_token_silent_with_error(
             scopes=scopes, account=account)
         return result
+    
+    def connection_url(conn_string):
+        conn_url = URL.create(
+            'mssql+pyodbc', 
+            query={
+                'odbc_connect': conn_string
+            }
+        )
+        return conn_url
+    
+    def connection(conn_url, tokenstruct):
+        engine = create_engine(
+            conn_url, 
+            connect_args={
+                'attrs_before': {
+                    SQL_COPT_SS_ACCESS_TOKEN:tokenstruct
+                    }
+                }
+            )
+        return engine
 
     def connect_to_db(result):
-        global conn
+        global conn, SQL_COPT_SS_ACCESS_TOKEN
 
         try:
             # Request
@@ -77,6 +99,8 @@ def query(sql: str,
             driver_fallback = 'ODBC Driver 17 for SQL Server'  # Fallback driver if available
             connection_string = f"DRIVER={driver};SERVER={server};DATABASE={database}"
             connection_string_fallback = f"DRIVER={driver_fallback};SERVER={server};DATABASE={database}"
+            conn_url = connection_url(connection_string)
+            conn_url_fallback = connection_url(connection_string_fallback)
 
             # get bytes from token obtained
             tokenb = bytes(result['access_token'], 'UTF-8')
@@ -89,19 +113,15 @@ def query(sql: str,
             if verbose:
                 print('Connecting to Database')
             try:
-                conn = pyodbc.connect(connection_string, attrs_before={
-                                      SQL_COPT_SS_ACCESS_TOKEN: tokenstruct})
-
+                conn = connection(conn_url, tokenstruct).connect()
             except pyodbc.InterfaceError as pe:
                 if "no default driver specified" in repr(pe):
-                    conn = pyodbc.connect(connection_string_fallback, attrs_before={
-                        SQL_COPT_SS_ACCESS_TOKEN: tokenstruct})
+                    conn = connection(conn_url_fallback, tokenstruct).connect()
                 else:
                     raise
             except pyodbc.Error as pe:
                 if "[unixODBC][Driver Manager]Can't open lib" in repr(pe):
-                    conn = pyodbc.connect(connection_string_fallback, attrs_before={
-                        SQL_COPT_SS_ACCESS_TOKEN: tokenstruct})
+                    conn = connection(conn_url_fallback, tokenstruct).connect()
                 else:
                     raise
         except pyodbc.ProgrammingError as pe:
@@ -124,6 +144,8 @@ def query(sql: str,
             if verbose:
                 print('Connection to db failed: ', err)
                 raise
+        
+        return conn
 
     accounts = msal_cache_accounts(clientID, authority)
 
@@ -158,13 +180,15 @@ def query(sql: str,
 
     if result:
         if result["access_token"]:
-            connect_to_db(result)
+            conn = connect_to_db(result)
 
             #  Query Database
             if verbose:
                 print('Querying database')
 
-            df = pd.read_sql(sql, conn, params=params)
+            with conn as connection:
+                df = pd.read_sql(sql_text(sql), connection, params=params)
+
             return df
     else:
         print(f'Received no data. '

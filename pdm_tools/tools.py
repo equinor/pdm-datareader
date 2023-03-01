@@ -4,11 +4,11 @@ from typing import Any, List, Optional
 
 import msal
 import pandas as pd
-import pyodbc
-from msal_extensions import *
-from sqlalchemy.engine import URL
-from sqlalchemy import create_engine, text as sql_text
 import sqlalchemy.exc
+from msal_extensions import *
+from sqlalchemy import create_engine
+from sqlalchemy import text as sql_text
+from sqlalchemy.engine import URL
 
 from pdm_tools.utils import get_login_name
 
@@ -67,25 +67,25 @@ def query(sql: str,
         result = app.acquire_token_silent_with_error(
             scopes=scopes, account=account)
         return result
-    
+
     def connection_url(conn_string):
         conn_url = URL.create(
-            'mssql+pyodbc', 
+            'mssql+pyodbc',
             query={
                 'odbc_connect': conn_string
             }
         )
         return conn_url
-    
+
     def connection(conn_url, tokenstruct):
         engine = create_engine(
-            conn_url, 
+            conn_url,
             connect_args={
                 'attrs_before': {
-                    SQL_COPT_SS_ACCESS_TOKEN:tokenstruct
-                    }
+                    SQL_COPT_SS_ACCESS_TOKEN: tokenstruct
                 }
-            )
+            }
+        )
         return engine
 
     def connect_to_db(result):
@@ -145,7 +145,7 @@ def query(sql: str,
             if verbose:
                 print('Connection to db failed: ', err)
                 raise
-        
+
         return conn
 
     accounts = msal_cache_accounts(clientID, authority)

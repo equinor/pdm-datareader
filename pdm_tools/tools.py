@@ -12,11 +12,15 @@ from sqlalchemy.engine import URL
 
 from pdm_tools.utils import get_login_name
 
+engine = None
+
 
 def query(sql: str,
           params: Optional[List[Any]] = None,
           short_name: Optional[str] = get_login_name(),
           verbose: Optional[bool] = True):
+    global engine
+
     # SHORTNAME@equinor.com -- short name shall be capitalized
     username = short_name.upper()+'@equinor.com'
     tenantID = '3aa4a235-b6e2-48d5-9195-7fcf05b459b0'
@@ -77,30 +81,32 @@ def query(sql: str,
         )
         return conn_url
 
-    def connection(conn_url, tokenstruct):
-        engine = create_engine(
-            conn_url,
-            connect_args={
-                'attrs_before': {
-                    SQL_COPT_SS_ACCESS_TOKEN: tokenstruct
+    def get_engine(conn_url="", tokenstruct=None):
+        global engine
+
+        SQL_COPT_SS_ACCESS_TOKEN = 1256
+
+        if engine is None:
+            engine = create_engine(
+                conn_url,
+                connect_args={
+                    'attrs_before': {
+                        SQL_COPT_SS_ACCESS_TOKEN: tokenstruct
+                    }
                 }
-            }
-        )
+            )
+
         return engine
 
-    def connect_to_db(result):
-        global conn, SQL_COPT_SS_ACCESS_TOKEN
-
+    def connect_to_db(result, new_token=True):
         try:
             # Request
-            SQL_COPT_SS_ACCESS_TOKEN = 1256
             server = 'pdmprod.database.windows.net'
             database = "pdm"
             driver = 'ODBC Driver 18 for SQL Server'  # Primary driver if available
             driver_fallback = 'ODBC Driver 17 for SQL Server'  # Fallback driver if available
             connection_string = f"DRIVER={driver};SERVER={server};DATABASE={database}"
             connection_string_fallback = f"DRIVER={driver_fallback};SERVER={server};DATABASE={database}"
-            conn_url = connection_url(connection_string)
             conn_url_fallback = connection_url(connection_string_fallback)
 
             # get bytes from token obtained
@@ -114,15 +120,17 @@ def query(sql: str,
             if verbose:
                 print('Connecting to Database')
             try:
-                conn = connection(conn_url, tokenstruct).connect()
+                conn = get_engine(connection_url(
+                    connection_string), tokenstruct).connect()
+
             except sqlalchemy.exc.InterfaceError as pe:
                 if "no default driver specified" in repr(pe):
-                    conn = connection(conn_url_fallback, tokenstruct).connect()
+                    conn = get_engine(conn_url_fallback, tokenstruct).connect()
                 else:
                     raise
             except sqlalchemy.exc.DBAPIError as pe:
                 if "[unixODBC][Driver Manager]Can't open lib" in repr(pe):
-                    conn = connection(conn_url_fallback, tokenstruct).connect()
+                    conn = get_engine(conn_url_fallback, tokenstruct).connect()
                 else:
                     raise
         except sqlalchemy.exc.ProgrammingError as pe:
@@ -167,6 +175,7 @@ def query(sql: str,
                     if verbose:
                         print(
                             "Interactive Authentication required to obtain a new Access Token.")
+                    engine = None
                     result = msal_delegated_interactive_flow(
                         scopes=scopes, domain_hint=tenantID)
     else:
@@ -176,6 +185,7 @@ def query(sql: str,
             print("First authentication")
         result = msal_delegated_interactive_flow(
             scopes=scopes, domain_hint=tenantID)
+        engine = None
         idTokenClaims = result['id_token_claims']
         username = idTokenClaims['preferred_username']
 

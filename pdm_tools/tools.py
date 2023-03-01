@@ -8,6 +8,7 @@ import pyodbc
 from msal_extensions import *
 from sqlalchemy.engine import URL
 from sqlalchemy import create_engine, text as sql_text
+import sqlalchemy.exc
 
 from pdm_tools.utils import get_login_name
 
@@ -114,17 +115,17 @@ def query(sql: str,
                 print('Connecting to Database')
             try:
                 conn = connection(conn_url, tokenstruct).connect()
-            except pyodbc.InterfaceError as pe:
+            except sqlalchemy.exc.InterfaceError as pe:
                 if "no default driver specified" in repr(pe):
                     conn = connection(conn_url_fallback, tokenstruct).connect()
                 else:
                     raise
-            except pyodbc.Error as pe:
+            except sqlalchemy.exc.DBAPIError as pe:
                 if "[unixODBC][Driver Manager]Can't open lib" in repr(pe):
                     conn = connection(conn_url_fallback, tokenstruct).connect()
                 else:
                     raise
-        except pyodbc.ProgrammingError as pe:
+        except sqlalchemy.exc.ProgrammingError as pe:
             if "(40615) (SQLDriverConnect)" in repr(pe):
                 if verbose:
                     print(
@@ -132,7 +133,7 @@ def query(sql: str,
                 raise
             if verbose:
                 print('Connection to db failed: ', pe)
-        except pyodbc.InterfaceError as pe:
+        except sqlalchemy.exc.InterfaceError as pe:
             if "(18456) (SQLDriverConnect)" in repr(pe):
                 if verbose:
                     print("Login using token failed. Do you have access?")

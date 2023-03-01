@@ -13,7 +13,7 @@ from pdm_tools.utils import get_login_name
 def query(sql: str,
           params: Optional[List[Any]] = None,
           short_name: Optional[str] = get_login_name(),
-          verbose: Optional[bool] = True):
+          verbose: Optional[bool] = False):
     # SHORTNAME@equinor.com -- short name shall be capitalized
     username = short_name.upper()+'@equinor.com'
     tenantID = '3aa4a235-b6e2-48d5-9195-7fcf05b459b0'
@@ -23,9 +23,8 @@ def query(sql: str,
     result = None
     accounts = None
     myAccount = None
-    idTokenClaims = None
 
-    def msal_persistence(location, fallback_to_plaintext=False):
+    def msal_persistence(location):
         """Build a suitable persistence instance based your current OS"""
         if sys.platform.startswith('win'):
             return FilePersistenceWithDataProtection(location)
@@ -153,8 +152,6 @@ def query(sql: str,
             print("First authentication")
         result = msal_delegated_interactive_flow(
             scopes=scopes, domain_hint=tenantID)
-        idTokenClaims = result['id_token_claims']
-        username = idTokenClaims['preferred_username']
 
     if result:
         if result["access_token"]:

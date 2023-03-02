@@ -112,7 +112,6 @@ def query(sql: str,
             driver_fallback = 'ODBC Driver 17 for SQL Server'  # Fallback driver if available
             connection_string = f"DRIVER={driver};SERVER={server};DATABASE={database}"
             connection_string_fallback = f"DRIVER={driver_fallback};SERVER={server};DATABASE={database}"
-            conn_url_fallback =connection_string_fallback
 
             # get bytes from token obtained
             tokenb = bytes(result['access_token'], 'UTF-8')
@@ -129,13 +128,13 @@ def query(sql: str,
             except sqlalchemy.exc.InterfaceError as pe:
                 reset_engine()
                 if "no default driver specified" in repr(pe):
-                    conn = get_engine(conn_url_fallback, tokenstruct).connect()
+                    conn = get_engine(connection_string_fallback, tokenstruct).connect()
                 else:
                     raise
             except sqlalchemy.exc.DBAPIError as pe:
                 reset_engine()
                 if "[unixODBC][Driver Manager]Can't open lib" in repr(pe):
-                    conn = get_engine(conn_url_fallback, tokenstruct).connect()
+                    conn = get_engine(connection_string_fallback, tokenstruct).connect()
                 else:
                     raise
         except sqlalchemy.exc.ProgrammingError as pe:

@@ -98,7 +98,9 @@ def query(sql: str,
 
         return engine
 
-    def connect_to_db(result, new_token=True):
+    def connect_to_db(result):
+        global engine
+
         try:
             # Request
             server = 'pdmprod.database.windows.net'
@@ -124,16 +126,19 @@ def query(sql: str,
                     connection_string), tokenstruct).connect()
 
             except sqlalchemy.exc.InterfaceError as pe:
+                engine = None
                 if "no default driver specified" in repr(pe):
                     conn = get_engine(conn_url_fallback, tokenstruct).connect()
                 else:
                     raise
             except sqlalchemy.exc.DBAPIError as pe:
+                engine = None
                 if "[unixODBC][Driver Manager]Can't open lib" in repr(pe):
                     conn = get_engine(conn_url_fallback, tokenstruct).connect()
                 else:
                     raise
         except sqlalchemy.exc.ProgrammingError as pe:
+            engine = None
             if "(40615) (SQLDriverConnect)" in repr(pe):
                 if verbose:
                     print(
@@ -142,6 +147,7 @@ def query(sql: str,
             if verbose:
                 print('Connection to db failed: ', pe)
         except sqlalchemy.exc.InterfaceError as pe:
+            eingine = None
             if "(18456) (SQLDriverConnect)" in repr(pe):
                 if verbose:
                     print("Login using token failed. Do you have access?")
@@ -150,6 +156,7 @@ def query(sql: str,
                 print('Connection to db failed: ', pe)
                 raise
         except Exception as err:
+            engine = None
             if verbose:
                 print('Connection to db failed: ', err)
                 raise

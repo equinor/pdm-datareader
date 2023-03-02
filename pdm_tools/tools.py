@@ -124,7 +124,6 @@ def query(sql: str,
             try:
                 conn = get_engine(connection_url(
                     connection_string), tokenstruct).connect()
-
             except sqlalchemy.exc.InterfaceError as pe:
                 engine = None
                 if "no default driver specified" in repr(pe):
@@ -147,7 +146,7 @@ def query(sql: str,
             if verbose:
                 print('Connection to db failed: ', pe)
         except sqlalchemy.exc.InterfaceError as pe:
-            eingine = None
+            engine = None
             if "(18456) (SQLDriverConnect)" in repr(pe):
                 if verbose:
                     print("Login using token failed. Do you have access?")

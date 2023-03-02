@@ -14,12 +14,17 @@ from pdm_tools.utils import get_login_name
 
 engine = None
 
+def reset_engine():
+    global engine
+    
+    if engine is not None:
+        engine.dispose()
+        engine = None
 
 def query(sql: str,
           params: Optional[List[Any]] = None,
           short_name: Optional[str] = get_login_name(),
           verbose: Optional[bool] = True):
-    global engine
 
     # SHORTNAME@equinor.com -- short name shall be capitalized
     username = short_name.upper()+'@equinor.com'
@@ -88,7 +93,7 @@ def query(sql: str,
 
         if engine is None:
             engine = create_engine(
-                conn_url,
+                connection_url(conn_url),
                 connect_args={
                     'attrs_before': {
                         SQL_COPT_SS_ACCESS_TOKEN: tokenstruct
@@ -99,8 +104,6 @@ def query(sql: str,
         return engine
 
     def connect_to_db(result):
-        global engine
-
         try:
             # Request
             server = 'pdmprod.database.windows.net'
@@ -109,7 +112,7 @@ def query(sql: str,
             driver_fallback = 'ODBC Driver 17 for SQL Server'  # Fallback driver if available
             connection_string = f"DRIVER={driver};SERVER={server};DATABASE={database}"
             connection_string_fallback = f"DRIVER={driver_fallback};SERVER={server};DATABASE={database}"
-            conn_url_fallback = connection_url(connection_string_fallback)
+            conn_url_fallback =connection_string_fallback
 
             # get bytes from token obtained
             tokenb = bytes(result['access_token'], 'UTF-8')
@@ -122,22 +125,21 @@ def query(sql: str,
             if verbose:
                 print('Connecting to Database')
             try:
-                conn = get_engine(connection_url(
-                    connection_string), tokenstruct).connect()
+                conn = get_engine(connection_string, tokenstruct).connect()
             except sqlalchemy.exc.InterfaceError as pe:
-                engine = None
+                reset_engine()
                 if "no default driver specified" in repr(pe):
                     conn = get_engine(conn_url_fallback, tokenstruct).connect()
                 else:
                     raise
             except sqlalchemy.exc.DBAPIError as pe:
-                engine = None
+                reset_engine()
                 if "[unixODBC][Driver Manager]Can't open lib" in repr(pe):
                     conn = get_engine(conn_url_fallback, tokenstruct).connect()
                 else:
                     raise
         except sqlalchemy.exc.ProgrammingError as pe:
-            engine = None
+            reset_engine()
             if "(40615) (SQLDriverConnect)" in repr(pe):
                 if verbose:
                     print(
@@ -146,7 +148,7 @@ def query(sql: str,
             if verbose:
                 print('Connection to db failed: ', pe)
         except sqlalchemy.exc.InterfaceError as pe:
-            engine = None
+            reset_engine()
             if "(18456) (SQLDriverConnect)" in repr(pe):
                 if verbose:
                     print("Login using token failed. Do you have access?")
@@ -155,7 +157,7 @@ def query(sql: str,
                 print('Connection to db failed: ', pe)
                 raise
         except Exception as err:
-            engine = None
+            reset_engine()
             if verbose:
                 print('Connection to db failed: ', err)
                 raise
@@ -181,7 +183,7 @@ def query(sql: str,
                     if verbose:
                         print(
                             "Interactive Authentication required to obtain a new Access Token.")
-                    engine = None
+                    reset_engine()
                     result = msal_delegated_interactive_flow(
                         scopes=scopes, domain_hint=tenantID)
     else:
@@ -191,7 +193,7 @@ def query(sql: str,
             print("First authentication")
         result = msal_delegated_interactive_flow(
             scopes=scopes, domain_hint=tenantID)
-        engine = None
+        reset_engine()
         idTokenClaims = result['id_token_claims']
         username = idTokenClaims['preferred_username']
 

@@ -4,16 +4,28 @@ from typing import Any, List, Optional
 
 import msal
 import pandas as pd
-import pyodbc
+import sqlalchemy.exc
 from msal_extensions import *
+from sqlalchemy import create_engine
+from sqlalchemy import text as sql_text
+from sqlalchemy.engine import URL
 
 from pdm_tools.utils import get_login_name
 
+engine = None
+
+def reset_engine():
+    global engine
+    
+    if engine is not None:
+        engine.dispose()
+        engine = None
 
 def query(sql: str,
           params: Optional[List[Any]] = None,
           short_name: Optional[str] = get_login_name(),
           verbose: Optional[bool] = True):
+
     # SHORTNAME@equinor.com -- short name shall be capitalized
     username = short_name.upper()+'@equinor.com'
     tenantID = '3aa4a235-b6e2-48d5-9195-7fcf05b459b0'
@@ -65,12 +77,35 @@ def query(sql: str,
             scopes=scopes, account=account)
         return result
 
-    def connect_to_db(result):
-        global conn
+    def connection_url(conn_string):
+        conn_url = URL.create(
+            'mssql+pyodbc',
+            query={
+                'odbc_connect': conn_string
+            }
+        )
+        return conn_url
 
+    def get_engine(conn_url="", tokenstruct=None):
+        global engine
+
+        SQL_COPT_SS_ACCESS_TOKEN = 1256
+
+        if engine is None:
+            engine = create_engine(
+                connection_url(conn_url),
+                connect_args={
+                    'attrs_before': {
+                        SQL_COPT_SS_ACCESS_TOKEN: tokenstruct
+                    }
+                }
+            )
+
+        return engine
+
+    def connect_to_db(result):
         try:
             # Request
-            SQL_COPT_SS_ACCESS_TOKEN = 1256
             server = 'pdmprod.database.windows.net'
             database = "pdm"
             driver = 'ODBC Driver 18 for SQL Server'  # Primary driver if available
@@ -89,22 +124,21 @@ def query(sql: str,
             if verbose:
                 print('Connecting to Database')
             try:
-                conn = pyodbc.connect(connection_string, attrs_before={
-                                      SQL_COPT_SS_ACCESS_TOKEN: tokenstruct})
-
-            except pyodbc.InterfaceError as pe:
+                conn = get_engine(connection_string, tokenstruct).connect()
+            except sqlalchemy.exc.InterfaceError as pe:
+                reset_engine()
                 if "no default driver specified" in repr(pe):
-                    conn = pyodbc.connect(connection_string_fallback, attrs_before={
-                        SQL_COPT_SS_ACCESS_TOKEN: tokenstruct})
+                    conn = get_engine(connection_string_fallback, tokenstruct).connect()
                 else:
                     raise
-            except pyodbc.Error as pe:
+            except sqlalchemy.exc.DBAPIError as pe:
+                reset_engine()
                 if "[unixODBC][Driver Manager]Can't open lib" in repr(pe):
-                    conn = pyodbc.connect(connection_string_fallback, attrs_before={
-                        SQL_COPT_SS_ACCESS_TOKEN: tokenstruct})
+                    conn = get_engine(connection_string_fallback, tokenstruct).connect()
                 else:
                     raise
-        except pyodbc.ProgrammingError as pe:
+        except sqlalchemy.exc.ProgrammingError as pe:
+            reset_engine()
             if "(40615) (SQLDriverConnect)" in repr(pe):
                 if verbose:
                     print(
@@ -112,7 +146,8 @@ def query(sql: str,
                 raise
             if verbose:
                 print('Connection to db failed: ', pe)
-        except pyodbc.InterfaceError as pe:
+        except sqlalchemy.exc.InterfaceError as pe:
+            reset_engine()
             if "(18456) (SQLDriverConnect)" in repr(pe):
                 if verbose:
                     print("Login using token failed. Do you have access?")
@@ -121,9 +156,12 @@ def query(sql: str,
                 print('Connection to db failed: ', pe)
                 raise
         except Exception as err:
+            reset_engine()
             if verbose:
                 print('Connection to db failed: ', err)
                 raise
+
+        return conn
 
     accounts = msal_cache_accounts(clientID, authority)
 
@@ -144,6 +182,7 @@ def query(sql: str,
                     if verbose:
                         print(
                             "Interactive Authentication required to obtain a new Access Token.")
+                    reset_engine()
                     result = msal_delegated_interactive_flow(
                         scopes=scopes, domain_hint=tenantID)
     else:
@@ -153,18 +192,21 @@ def query(sql: str,
             print("First authentication")
         result = msal_delegated_interactive_flow(
             scopes=scopes, domain_hint=tenantID)
+        reset_engine()
         idTokenClaims = result['id_token_claims']
         username = idTokenClaims['preferred_username']
 
     if result:
         if result["access_token"]:
-            connect_to_db(result)
+            conn = connect_to_db(result)
 
             #  Query Database
             if verbose:
                 print('Querying database')
 
-            df = pd.read_sql(sql, conn, params=params)
+            with conn as connection:
+                df = pd.read_sql(sql_text(sql), connection, params=params)
+
             return df
     else:
         print(f'Received no data. '

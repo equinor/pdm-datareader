@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "pdm-tools"
-version = "2.1.2"
+version = "2.2"
 description = "A small python package to execute queries to PDM without having to re-authenticate every time"
 authors = ["PDM TEAM <AWL@equinor.com>"]
 license = "MIT"
@@ -18,6 +18,7 @@ pyodbc = [
     {version = "^4.0.35", markers="sys_platform != 'darwin' or platform_machine != 'arm64'"}
 ]
 pandas = "^1.4.0"
+sqlalchemy = "^2.0.4"
 
 [tool.poetry.group.dev.dependencies]
 autopep8 = "^2.0.1"

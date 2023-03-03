@@ -24,7 +24,7 @@ def reset_engine():
 def query(sql: str,
           params: Optional[List[Any]] = None,
           short_name: Optional[str] = get_login_name(),
-          verbose: Optional[bool] = True):
+          verbose: Optional[bool] = False):
 
     # SHORTNAME@equinor.com -- short name shall be capitalized
     username = short_name.upper()+'@equinor.com'
@@ -35,9 +35,8 @@ def query(sql: str,
     result = None
     accounts = None
     myAccount = None
-    idTokenClaims = None
 
-    def msal_persistence(location, fallback_to_plaintext=False):
+    def msal_persistence(location):
         """Build a suitable persistence instance based your current OS"""
         if sys.platform.startswith('win'):
             return FilePersistenceWithDataProtection(location)

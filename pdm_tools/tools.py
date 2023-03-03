@@ -192,8 +192,6 @@ def query(sql: str,
         result = msal_delegated_interactive_flow(
             scopes=scopes, domain_hint=tenantID)
         reset_engine()
-        idTokenClaims = result['id_token_claims']
-        username = idTokenClaims['preferred_username']
 
     if result:
         if result["access_token"]:

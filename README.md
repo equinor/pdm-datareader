@@ -1,5 +1,7 @@
 # PDM Tools
 
+<center><img src="pdm-tools.svg" alt="pdm-tools logo" width="50%"></center><br>
+
 This is a simple tool package for querying data from 
 [Production Data Mart](https://wiki.equinor.com/wiki/index.php/Production_Data_Mart) without having to re-authenticate every time. <br>
 

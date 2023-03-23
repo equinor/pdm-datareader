@@ -24,7 +24,10 @@ def reset_engine():
 def query(sql: str,
           params: Optional[List[Any]] = None,
           short_name: Optional[str] = get_login_name(),
-          verbose: Optional[bool] = False):
+          verbose: Optional[bool] = False,
+          server: Optional[str] = 'pdmprod.database.windows.net',
+          database: Optional[str] = 'pdm'
+         ):
 
     # SHORTNAME@equinor.com -- short name shall be capitalized
     username = short_name.upper()+'@equinor.com'
@@ -102,7 +105,7 @@ def query(sql: str,
 
         return engine
 
-    def connect_to_db(result):
+    def connect_to_db(result, server=server, database=database):
         try:
             # Request
             server = 'pdmprod.database.windows.net'
@@ -195,7 +198,7 @@ def query(sql: str,
 
     if result:
         if result["access_token"]:
-            conn = connect_to_db(result)
+            conn = connect_to_db(result, server, database)
 
             #  Query Database
             if verbose:

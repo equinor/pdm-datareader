@@ -108,8 +108,8 @@ def query(sql: str,
     def connect_to_db(result, server=server, database=database):
         try:
             # Request
-            server = 'pdmprod.database.windows.net'
-            database = "pdm"
+            server = server
+            database = database
             driver = 'ODBC Driver 18 for SQL Server'  # Primary driver if available
             driver_fallback = 'ODBC Driver 17 for SQL Server'  # Fallback driver if available
             connection_string = f"DRIVER={driver};SERVER={server};DATABASE={database}"

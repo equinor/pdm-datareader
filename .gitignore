@@ -50,6 +50,8 @@ coverage.xml
 docs/_build/
 
 token_cache.bin
+pdm_token_cache.bin
+
 .fake
 
 # SNYK

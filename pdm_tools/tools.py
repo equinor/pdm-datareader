@@ -1,3 +1,4 @@
+import os
 import struct
 import sys
 from typing import Any, List, Optional
@@ -13,6 +14,7 @@ from sqlalchemy.engine import URL
 from pdm_tools.utils import get_login_name
 
 engine = None
+token_location = "pdm_token_cache.bin"
 
 def reset_engine():
     global engine
@@ -36,8 +38,11 @@ def query(sql: str,
     accounts = None
     myAccount = None
 
-    def msal_persistence(location):
+    def msal_persistence(location: str = token_location):
         """Build a suitable persistence instance based your current OS"""
+        
+        global token_location
+        token_location = location
         if sys.platform.startswith('win'):
             return FilePersistenceWithDataProtection(location)
         if sys.platform.startswith('darwin'):
@@ -46,11 +51,22 @@ def query(sql: str,
 
     def msal_cache_accounts(clientID, authority):
         # Accounts
-        persistence = msal_persistence("token_cache.bin")
+        persistence = msal_persistence()
         if verbose:
             print("Is this MSAL persistence cache encrypted?",
                   persistence.is_encrypted)
-        cache = PersistedTokenCache(persistence)
+        
+        try:
+            cache = PersistedTokenCache(persistence)
+        except:
+            from msal_extensions.persistence import PersistenceDecryptionError
+
+            # Try loading persistence and possibly remove if it is invalid
+            try:
+                persistence.load()
+            except PersistenceDecryptionError:
+                os.remove(token_location)
+                cache = PersistedTokenCache(msal_persistence())
 
         app = msal.PublicClientApplication(
             client_id=clientID, authority=authority, token_cache=cache)
@@ -58,7 +74,8 @@ def query(sql: str,
         return accounts
 
     def msal_delegated_interactive_flow(scopes, prompt=None, login_hint=None, domain_hint=None):
-        persistence = msal_persistence("token_cache.bin")
+        persistence = msal_persistence()
+
         cache = PersistedTokenCache(persistence)
         app = msal.PublicClientApplication(
             clientID, authority=authority, token_cache=cache)
@@ -67,7 +84,7 @@ def query(sql: str,
         return result
 
     def msal_delegated_refresh(clientID, scopes, authority, account):
-        persistence = msal_persistence("token_cache.bin")
+        persistence = msal_persistence()
         cache = PersistedTokenCache(persistence)
 
         app = msal.PublicClientApplication(

@@ -176,7 +176,7 @@ def query(sql: str,
                 result = msal_delegated_refresh(
                     clientID, scopes, authority, myAccount)
 
-                if result is None:
+                if not "access_token" in result:
                     # Get a new Access Token using the Interactive Flow
                     if verbose:
                         print(
@@ -195,7 +195,7 @@ def query(sql: str,
             scopes=scopes, domain_hint=tenantID)
 
     if result:
-        if "access_token" in result.keys() and result["access_token"]:
+        if "access_token" in result:
             conn = connect_to_db(result)
 
             #  Query Database

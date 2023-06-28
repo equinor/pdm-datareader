@@ -189,12 +189,13 @@ def query(sql: str,
         # Trigger interactive authentication flow
         if verbose:
             print("First authentication")
+        
+        reset_engine()
         result = msal_delegated_interactive_flow(
             scopes=scopes, domain_hint=tenantID)
-        reset_engine()
 
     if result:
-        if result["access_token"]:
+        if "access_token" in result.keys() and result["access_token"]:
             conn = connect_to_db(result)
 
             #  Query Database
@@ -205,6 +206,8 @@ def query(sql: str,
                 df = pd.read_sql(sql_text(sql), connection, params=params)
 
             return df
+        else:
+            print(f"Failed getting token, returned:\n{result}")
     else:
         print(f'Received no data. '
               f'This may be due to the account retrieved not having sufficient access or not existing. '

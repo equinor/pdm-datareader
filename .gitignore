@@ -59,3 +59,6 @@ token_cache.bin
 .idea
 
 .python-version
+
+# Poetry
+*.lock

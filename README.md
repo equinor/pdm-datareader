@@ -14,7 +14,7 @@ directed to Production Data Mart.
 ## Usage
 1. From the python environment you want to install the package in, run:<br>
     ```pip install git+https://github.com/equinor/pdm-tools.git``` <br>
-2. The [ODBC Driver for SQL Server](https://learn.microsoft.com/en-us/sql/connect/odbc/download-odbc-driver-for-sql-server) must be installed. <br>
+2. The [ODBC Driver for SQL Server](https://learn.microsoft.com/en-us/sql/connect/odbc/download-odbc-driver-for-sql-server) must be installed (v18 and v17 currently supported). <br> This driver is bundled with the [Microsoft SQL Client](https://accessit.equinor.com/Search/Search?term=MICROSOFT+SQL+CLIENT) package in AccessIT.
 3. To query PDM and retrieve data:<br>
     ```
     import datetime as dt

@@ -17,7 +17,7 @@ pyodbc = [
     {version = "4.0.34", markers="sys_platform == 'darwin' and platform_machine == 'arm64'"},
     {version = "^4.0.35", markers="sys_platform != 'darwin' or platform_machine != 'arm64'"}
 ]
-pandas = "^1.4 || ^2.0.2"
+pandas = ">=1.4.4, !=2.0.0, !=2.0.1"
 sqlalchemy = "^2.0.4"
 
 [tool.poetry.group.dev.dependencies]

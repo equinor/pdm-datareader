@@ -76,6 +76,8 @@ def query(sql: str,
                 client_id=clientID, authority=authority, token_cache=cache)
             accounts = app.get_accounts()
         except:
+            if verbose:
+                print(f"Deleting invalid token cache at {token_location}")
             os.remove(token_location)
 
         return accounts

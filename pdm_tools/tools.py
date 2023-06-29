@@ -16,12 +16,26 @@ from pdm_tools.utils import get_login_name
 engine = None
 token_location = "pdm_token_cache.bin"
 
+
 def reset_engine():
     global engine
-    
+
     if engine is not None:
         engine.dispose()
         engine = None
+
+
+def set_token_location(location: str):
+    global token_location
+
+    if isinstance(location, str):
+        if len(location) > 5:
+            token_location = location
+        else:
+            raise ValueError(f"Invalid location string {location}")
+    else:
+        raise TypeError(f"Input location shall be a string.")
+
 
 def query(sql: str,
           params: Optional[List[Any]] = None,
@@ -40,9 +54,8 @@ def query(sql: str,
 
     def msal_persistence(location: str = token_location):
         """Build a suitable persistence instance based your current OS"""
-        
-        global token_location
-        token_location = location
+
+        set_token_location(location)
         if sys.platform.startswith('win'):
             return FilePersistenceWithDataProtection(location)
         if sys.platform.startswith('darwin'):
@@ -51,26 +64,20 @@ def query(sql: str,
 
     def msal_cache_accounts(clientID, authority):
         # Accounts
-        persistence = msal_persistence()
-        if verbose:
-            print("Is this MSAL persistence cache encrypted?",
-                  persistence.is_encrypted)
-        
+        accounts = None
+
         try:
+            persistence = msal_persistence()
+            if verbose:
+                print("Is this MSAL persistence cache encrypted?",
+                      persistence.is_encrypted)
             cache = PersistedTokenCache(persistence)
+            app = msal.PublicClientApplication(
+                client_id=clientID, authority=authority, token_cache=cache)
+            accounts = app.get_accounts()
         except:
-            from msal_extensions.persistence import PersistenceDecryptionError
+            os.remove(token_location)
 
-            # Try loading persistence and possibly remove if it is invalid
-            try:
-                persistence.load()
-            except PersistenceDecryptionError:
-                os.remove(token_location)
-                cache = PersistedTokenCache(msal_persistence())
-
-        app = msal.PublicClientApplication(
-            client_id=clientID, authority=authority, token_cache=cache)
-        accounts = app.get_accounts()
         return accounts
 
     def msal_delegated_interactive_flow(scopes, prompt=None, login_hint=None, domain_hint=None):
@@ -144,13 +151,15 @@ def query(sql: str,
             except sqlalchemy.exc.InterfaceError as pe:
                 reset_engine()
                 if "no default driver specified" in repr(pe):
-                    conn = get_engine(connection_string_fallback, tokenstruct).connect()
+                    conn = get_engine(
+                        connection_string_fallback, tokenstruct).connect()
                 else:
                     raise
             except sqlalchemy.exc.DBAPIError as pe:
                 reset_engine()
                 if "[unixODBC][Driver Manager]Can't open lib" in repr(pe):
-                    conn = get_engine(connection_string_fallback, tokenstruct).connect()
+                    conn = get_engine(
+                        connection_string_fallback, tokenstruct).connect()
                 else:
                     raise
         except sqlalchemy.exc.ProgrammingError as pe:

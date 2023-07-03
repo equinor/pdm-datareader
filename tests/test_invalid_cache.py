@@ -6,29 +6,28 @@ from pdm_tools import tools
 sql = "SELECT [FCTY_CODE] FROM [PDMVW].[FACILITY_MASTER] WHERE STID_CODE = 'JSV'"
 
 
-def test_no_token():
-
+def test_normal():
     df = tools.query(sql)
     assert df["FCTY_CODE"][0] == "JSFC"
 
 
 def test_handle_invalid_tokens():
-
-    dest = replace_file("token_cache_invalid_user.bin")
-    tools.set_token_location(dest)
+    prepare_test("token_cache_invalid_user.bin")
     df = tools.query(sql,verbose=True)
     assert df["FCTY_CODE"][0] == "JSFC"
 
-    dest = replace_file("token_cache_actually.txt")
-    tools.set_token_location(dest)
+    prepare_test("token_cache_actually.txt")
     df = tools.query(sql,verbose=True)
     assert df["FCTY_CODE"][0] == "JSFC"
 
-    dest = replace_file("token_cache_invalid_filetype.bmp")
-    tools.set_token_location(dest)
+    prepare_test("token_cache_invalid_filetype.bmp")
     df = tools.query(sql,verbose=True)
     assert df["FCTY_CODE"][0] == "JSFC"
-
+    
+    
+def prepare_test(filename: str):
+    dest = replace_file(filename)
+    tools.set_token_location(dest)
 
 def replace_file(filename: str) -> str:
     dir_path = os.path.dirname(os.path.realpath(__file__))

@@ -50,6 +50,9 @@ coverage.xml
 docs/_build/
 
 token_cache.bin
+pdm_token_cache.bin
+tests/tmp/
+
 .fake
 
 # SNYK
@@ -62,3 +65,6 @@ token_cache.bin
 
 # Poetry
 *.lock
+
+# pytest
+.pytest_cache/

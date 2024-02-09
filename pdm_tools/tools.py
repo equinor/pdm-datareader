@@ -1,7 +1,7 @@
 import os
 import struct
 import sys
-from typing import Any, List, Optional
+from typing import Optional
 
 import msal
 import pandas as pd
@@ -44,7 +44,7 @@ def set_token_location(location: str):
 
 def query(
     sql: str,
-    params: Optional[List[Any]] = None,
+    params: Optional[dict] = None,
     short_name: Optional[str] = get_login_name(),
     verbose: Optional[bool] = False,
 ):

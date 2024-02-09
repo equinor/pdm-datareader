@@ -1,30 +1,28 @@
 [tool.poetry]
 name = "pdm-tools"
-version = "2.2.3"
+version = "2.3.0"
 description = "A small python package to execute queries to PDM without having to re-authenticate every time"
 authors = ["PDM TEAM <AWL@equinor.com>"]
 license = "MIT"
 readme = "README.md"
-packages = [{include = "pdm_tools"}]
+packages = [{ include = "pdm_tools" }]
 repository = "https://github.com/equinor/pdm-tools"
-classifiers = ["License :: OSI Approved :: MIT License","Operating System :: OS Independent", 
-            "Programming Language :: Python :: 3.8", "Programming Language :: Python :: 3.9", 
-            "Programming Language :: Python :: 3.10", "Programming Language :: Python :: 3.11"]
+classifiers = [
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
 
 [tool.poetry.dependencies]
-python = "^3.8,<4.0"
-msal = "^1.20.0"
-msal-extensions = "^1.0.0"
-pyodbc = [
-    {version = "4.0.34", markers="sys_platform == 'darwin' and platform_machine == 'arm64'"},
-    {version = "^4.0.35", markers="sys_platform != 'darwin' or platform_machine != 'arm64'"}
-]
-pandas = ">=1.4.4, !=2.0.0, !=2.0.1"
-sqlalchemy = "^2.0.4"
+python = "^3.9,<4.0"
+msal = "^1.26.0"
+msal-extensions = "^1.1.0"
+pyodbc = "^5.1.0"
+pandas = "^2.0.3"
+sqlalchemy = "^2.0.5"
 
 [tool.poetry.group.dev.dependencies]
-autopep8 = "^2.0.1"
 pytest = "^7.0.0"
+black = "^24.1.1"
 
 [build-system]
 requires = ["poetry-core"]

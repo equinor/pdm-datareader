@@ -68,3 +68,5 @@ tests/tmp/
 
 # pytest
 .pytest_cache/
+
+.vscode/

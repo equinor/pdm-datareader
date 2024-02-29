@@ -210,7 +210,7 @@ def query(
                     )
                 result = msal_delegated_refresh(clientID, scopes, authority, myAccount)
 
-                if "access_token" not in result:
+                if result is None or "access_token" not in result:
                     # Get a new Access Token using the Interactive Flow
                     if verbose:
                         print(

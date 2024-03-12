@@ -1,5 +1,5 @@
-import os
 import shutil
+import pathlib
 
 from pdm_tools import tools
 
@@ -31,16 +31,13 @@ def prepare_test(filename: str):
 
 
 def replace_file(filename: str) -> str:
-    dir_path = os.path.dirname(os.path.realpath(__file__))
-    dest = os.path.join(dir_path, "tmp", "token_cache_invalid.bin")
-    source = os.path.join(dir_path, filename)
+    dir_path = pathlib.Path(__file__).parent
+    dest = dir_path.joinpath("tmp", "token_cache_invalid.bin")
+    source = dir_path.joinpath(filename)
+    dest.unlink(missing_ok=True)
 
-    try:
-        os.remove(dest)
-    except OSError:
-        pass
-    if not os.path.isdir(os.path.join(dir_path, "tmp")):
-        os.mkdir(os.path.join(dir_path, "tmp"))
+    if not dest.parent.is_dir():
+        dest.parent.mkdir()
     shutil.copyfile(src=source, dst=dest)
 
     return dest

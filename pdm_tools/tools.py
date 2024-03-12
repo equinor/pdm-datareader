@@ -1,4 +1,4 @@
-import os
+import pathlib
 import struct
 import sys
 from typing import Optional
@@ -32,6 +32,9 @@ def reset_engine():
 
 def set_token_location(location: str):
     global token_location
+
+    if isinstance(location,pathlib.Path):
+        location = str(location)
 
     if isinstance(location, str):
         if len(location) > 5:
@@ -87,7 +90,7 @@ def query(
         except:
             if verbose:
                 print(f"Deleting invalid token cache at {token_location}")
-            os.remove(token_location)
+            pathlib.Path(token_location).unlink(missing_ok=True)
 
         return accounts
 

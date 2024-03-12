@@ -16,6 +16,7 @@ classifiers = [
 python = "^3.9,<4.0"
 msal = "^1.26.0"
 msal-extensions = "^1.1.0"
+msal-bearer = "^0.2.1"
 pyodbc = "^5.1.0"
 pandas = "^2.0.3"
 sqlalchemy = "^2.0.5"

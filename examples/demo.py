@@ -12,3 +12,13 @@ df = tools.query(
     sql, params={"countrycode": "NO", "startdate": dt.datetime(2022, 1, 1)}
 )
 print(df)
+
+
+# optionally set your own token using
+tools.reset_engine()
+str_tok = tools.get_token()
+tools.set_token(str_tok)
+df = tools.query(
+    sql, params={"countrycode": "NO", "startdate": dt.datetime(2022, 1, 1)}
+)
+print(df)

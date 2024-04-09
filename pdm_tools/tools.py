@@ -169,7 +169,11 @@ def query(
                     raise
             except sqlalchemy.exc.DBAPIError as pe:
                 reset_engine()
-                if "[unixODBC][Driver Manager]Can't open lib" in repr(pe):
+                if (
+                    "[unixODBC][Driver Manager]Can" in repr(pe)
+                    and "open lib" in repr(pe)
+                    and driver in repr(pe)
+                ):
                     conn = get_engine(connection_string_fallback, tokenstruct).connect()
                 else:
                     raise

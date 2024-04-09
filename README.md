@@ -4,19 +4,21 @@
 <img src="pdm-tools.svg" alt="pdm-tools logo" width="50%">
 </p>
 
-This is a simple tool package for querying data from 
-[Production Data Mart](https://wiki.equinor.com/wiki/index.php/Production_Data_Mart) without having to re-authenticate every time. 
+[![Runs on Windows](https://img.shields.io/badge/Windows-0078D6?style=for-the-badge&logo=windows&logoColor=white)](https://img.shields.io/badge/Windows-0078D6?style=for-the-badge&logo=windows&logoColor=white)
+[![Runs on MacOS](https://img.shields.io/badge/mac%20os-000000?style=for-the-badge&logo=apple&logoColor=white)](https://img.shields.io/badge/mac%20os-000000?style=for-the-badge&logo=apple&logoColor=white)
+[![Runs on RHEL7](https://img.shields.io/badge/Red%20Hat-EE0000?style=for-the-badge&logo=redhat&logoColor=white)](https://img.shields.io/badge/Red%20Hat-EE0000?style=for-the-badge&logo=redhat&logoColor=white)
 
-Pull requests, feature requests and issues are welcome to be filed through the 
-[GitHub Project Repository](https://github.com/equinor/pdm-tools) or as a ServiceNow ticket 
-directed to Production Data Mart.
+This is a simple python package for querying [Production Data Mart](https://wiki.equinor.com/wiki/index.php/Production_Data_Mart) tables using SQL. The package handles authentication for end users. It must be run from Equinor managed environments.
+
+Pull requests, feature requests and issues are welcomed using the [GitHub Project Repository](https://github.com/equinor/pdm-tools) or as a ServiceNow ticket directed to Production Data Mart.
 
 ## Install
-1. From the python environment you want to install the package in, run:  
-    ```pip install git+https://github.com/equinor/pdm-tools.git```  
-2. Install [ODBC Driver for SQL Server](https://learn.microsoft.com/en-us/sql/connect/odbc/download-odbc-driver-for-sql-server) (v18 and v17 currently supported).  
-This driver is bundled with the [Microsoft SQL Client](https://accessit.equinor.com/Search/Search?term=MICROSOFT+SQL+CLIENT) package in AccessIT.
-3. For MacOS users it is recommended to also install unixodbc, see [https://pypi.org/project/pyodbc/](https://pypi.org/project/pyodbc/) for current instructions.
+1. Ensure that [ODBC Driver for SQL Server](https://learn.microsoft.com/en-us/sql/connect/odbc/download-odbc-driver-for-sql-server) is installed. Currently supports both v18 and v17.  
+This driver is bundled with the [Microsoft SQL Client](https://accessit.equinor.com/Search/Search?term=MICROSOFT+SQL+CLIENT) package in AccessIT, and should be pre installed on linux environments. Instructions for installing on MacOS can be found [here.](https://learn.microsoft.com/en-us/sql/connect/odbc/download-odbc-driver-for-sql-server).
+2. MacOS users must install unixodbc. See [https://pypi.org/project/pyodbc/](https://pypi.org/project/pyodbc/) for current instructions.
+3. Linux users must apply for [Linux compliant device exclusion](https://accessit.equinor.com/Search/Search?term=linux+exclusion) to get multifactor authentication to work.
+4. Finally install the latest version of the python package using:  
+    ```pip install git+https://github.com/equinor/pdm-tools.git```
 
 ## Usage
 See [examples/demo.py](examples/demo.py) or try the code below that queries PDM and retrieves data:  

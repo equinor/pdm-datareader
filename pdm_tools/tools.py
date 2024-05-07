@@ -24,6 +24,7 @@ def query(
     params: Optional[dict] = None,
     short_name: Optional[str] = get_login_name(),
     verbose: Optional[bool] = False,
+    token: Optional[str] = "",
 ):
     # SHORTNAME@equinor.com -- short name shall be capitalized
     username = short_name.upper() + "@equinor.com"
@@ -114,10 +115,13 @@ def query(
         return conn
 
     try:
-        auth = BearerAuth.get_auth(
-            tenantID=tenantID, clientID=clientID, scopes=scopes, username=username
-        )
-        conn = connect_to_db(auth.token)
+        if not token:
+            auth = BearerAuth.get_auth(
+                tenantID=tenantID, clientID=clientID, scopes=scopes, username=username
+            )
+            token = auth.token
+
+        conn = connect_to_db(token)
 
         #  Query Database
         if verbose:

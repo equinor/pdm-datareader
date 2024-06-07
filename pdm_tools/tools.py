@@ -118,20 +118,20 @@ def query(
                 )
             if verbose:
                 print("Connection to db failed: ", pe)
+            raise
         except sqlalchemy.exc.InterfaceError as pe:
             reset_engine()
             if "(18456) (SQLDriverConnect)" in repr(pe):
                 if verbose:
                     print("Login using token failed. Do you have access?")
-                raise
-            if verbose:
+            elif verbose:
                 print("Connection to db failed: ", pe)
-                raise
+            raise
         except Exception as err:
             reset_engine()
             if verbose:
-                print("Connection to db failed: ", err)
-                raise
+                print("Connection to db failed: ", err)                
+            raise
 
         return conn
 
@@ -143,7 +143,7 @@ def query(
             df = pd.read_sql(sql_text(sql), connection, params=params)
 
         return df
-    except:
+    except Exception as ex:
         print(
             "Received no data. "
             "This may be due to the account retrieved not having sufficient access or not existing. "

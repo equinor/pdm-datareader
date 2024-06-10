@@ -18,16 +18,16 @@ from sqlalchemy.engine import URL
 
 from pdm_tools.utils import get_login_name
 
-engine = None
+_engine = None
 token_location = "pdm_token_cache.bin"
 
 
 def reset_engine():
-    global engine
+    global _engine
 
-    if engine is not None:
-        engine.dispose()
-        engine = None
+    if _engine is not None:
+        _engine.dispose()
+        _engine = None
 
 
 def set_token_location(location: str):
@@ -119,26 +119,24 @@ def query(
         return result
 
     def connection_url(conn_string):
-        conn_url = URL.create("mssql+pyodbc", query={"odbc_connect": conn_string})
-        return conn_url
+        return URL.create("mssql+pyodbc", query={"odbc_connect": conn_string})
 
     def get_engine(conn_url="", tokenstruct=None, reset=False):
-        global engine
+        global _engine
 
         if reset:
             reset_engine()
 
-        SQL_COPT_SS_ACCESS_TOKEN = 1256
-
-        if engine is None:
-            engine = create_engine(
+        if _engine is None:
+            SQL_COPT_SS_ACCESS_TOKEN = 1256
+            _engine = create_engine(
                 connection_url(conn_url),
                 connect_args={"attrs_before": {SQL_COPT_SS_ACCESS_TOKEN: tokenstruct}},
             )
 
-        return engine
+        return _engine
 
-    def connect_to_db(result):
+    def connect_to_db(token):
         try:
             # Request
             server = "pdmprod.database.windows.net"
@@ -153,7 +151,7 @@ def query(
             )
 
             # get bytes from token obtained
-            tokenb = bytes(result["access_token"], "UTF-8")
+            tokenb = bytes(token, "UTF-8")
             exptoken = b""
             for i in tokenb:
                 exptoken += bytes({i})
@@ -242,7 +240,7 @@ def query(
 
     if result:
         if "access_token" in result:
-            conn = connect_to_db(result)
+            conn = connect_to_db(result["access_token"])
 
             #  Query Database
             if verbose:

@@ -33,7 +33,7 @@ def reset_engine():
 def set_token_location(location: str):
     global token_location
 
-    if isinstance(location,pathlib.Path):
+    if isinstance(location, pathlib.Path):
         location = str(location)
 
     if isinstance(location, str):
@@ -122,8 +122,11 @@ def query(
         conn_url = URL.create("mssql+pyodbc", query={"odbc_connect": conn_string})
         return conn_url
 
-    def get_engine(conn_url="", tokenstruct=None):
+    def get_engine(conn_url="", tokenstruct=None, reset=False):
         global engine
+
+        if reset:
+            reset_engine()
 
         SQL_COPT_SS_ACCESS_TOKEN = 1256
 
@@ -162,19 +165,21 @@ def query(
             try:
                 conn = get_engine(connection_string, tokenstruct).connect()
             except sqlalchemy.exc.InterfaceError as pe:
-                reset_engine()
                 if "no default driver specified" in repr(pe):
-                    conn = get_engine(connection_string_fallback, tokenstruct).connect()
+                    conn = get_engine(
+                        connection_string_fallback, tokenstruct, reset=True
+                    ).connect()
                 else:
                     raise
             except sqlalchemy.exc.DBAPIError as pe:
-                reset_engine()
                 if (
                     "[unixODBC][Driver Manager]Can" in repr(pe)
                     and "open lib" in repr(pe)
                     and driver in repr(pe)
                 ):
-                    conn = get_engine(connection_string_fallback, tokenstruct).connect()
+                    conn = get_engine(
+                        connection_string_fallback, tokenstruct, reset=True
+                    ).connect()
                 else:
                     raise
         except sqlalchemy.exc.ProgrammingError as pe:

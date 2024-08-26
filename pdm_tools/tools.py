@@ -187,23 +187,22 @@ def query(
                     print(
                         "Fails connecting from current IP-address. Are you on Equinor network?"
                     )
-                raise
             if verbose:
                 print("Connection to db failed: ", pe)
+            raise
         except sqlalchemy.exc.InterfaceError as pe:
             reset_engine()
             if "(18456) (SQLDriverConnect)" in repr(pe):
                 if verbose:
                     print("Login using token failed. Do you have access?")
-                raise
-            if verbose:
+            elif verbose:
                 print("Connection to db failed: ", pe)
-                raise
+            raise
         except Exception as err:
             reset_engine()
             if verbose:
                 print("Connection to db failed: ", err)
-                raise
+            raise
 
         return conn
 

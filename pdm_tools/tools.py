@@ -113,9 +113,10 @@ def query(
         except sqlalchemy.exc.ProgrammingError as pe:
             reset_engine()
             if "(40615) (SQLDriverConnect)" in repr(pe):
-                print(
-                    "Fails connecting from current IP-address. Are you on Equinor network?"
-                )
+                if verbose:
+                    print(
+                        "Fails connecting from current IP-address. Are you on Equinor network?"
+                    )
             if verbose:
                 print("Connection to db failed: ", pe)
             raise
@@ -130,7 +131,7 @@ def query(
         except Exception as err:
             reset_engine()
             if verbose:
-                print("Connection to db failed: ", err)                
+                print("Connection to db failed: ", err)
             raise
 
         return conn

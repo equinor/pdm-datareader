@@ -17,7 +17,9 @@ def replace_file(filename: str) -> str:
 
     return str(dest)
 
+
 sql = "SELECT [FCTY_CODE] FROM [PDMVW].[FACILITY_MASTER] WHERE STID_CODE = 'JSV'"
+
 
 def test_normal():
     df = tools.query(sql)

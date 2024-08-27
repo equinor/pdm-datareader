@@ -15,11 +15,21 @@ _token = ""
 
 
 def set_token(token: str):
+    """Setter for token if not using user-impersonation.
+
+    Args:
+        token (str): Authentication token string to use.
+    """
     global _token
     _token = token
 
 
 def get_token() -> str:
+    """Getter for authentication token. Will return auth token using user-impersonation if no token is set using set_token.
+
+    Returns:
+        str: Authentication token string
+    """
     if not _token:
         # SHORTNAME@equinor.com -- short name shall be capitalized
         username = get_login_name().upper() + "@equinor.com"
@@ -34,7 +44,24 @@ def get_token() -> str:
     return _token
 
 
+def get_engine(conn_url: str = "", tokenstruct=None, reset: bool = False):
+    global _engine
+
+    if reset:
+        reset_engine()
+
+    if _engine is None:
+        SQL_COPT_SS_ACCESS_TOKEN = 1256
+        _engine = create_engine(
+            URL.create("mssql+pyodbc", query={"odbc_connect": conn_url}),
+            connect_args={"attrs_before": {SQL_COPT_SS_ACCESS_TOKEN: tokenstruct}},
+        )
+
+    return _engine
+
+
 def reset_engine():
+    """Reset connection engine"""
     global _engine
 
     if _engine is not None:
@@ -42,110 +69,95 @@ def reset_engine():
         _engine = None
 
 
+def connect_to_db(token, verbose=False):
+    try:
+        # Request
+        server = "pdmprod.database.windows.net"
+        database = "pdm"
+        driver = "ODBC Driver 18 for SQL Server"  # Primary driver if available
+        driver_fallback = (
+            "ODBC Driver 17 for SQL Server"  # Fallback driver if available
+        )
+        connection_string = f"DRIVER={driver};SERVER={server};DATABASE={database}"
+        connection_string_fallback = (
+            f"DRIVER={driver_fallback};SERVER={server};DATABASE={database}"
+        )
+
+        # get bytes from token obtained
+        tokenb = bytes(token, "UTF-8")
+        exptoken = b""
+        for i in tokenb:
+            exptoken += bytes({i})
+            exptoken += bytes(1)
+
+        tokenstruct = struct.pack("=i", len(exptoken)) + exptoken
+        if verbose:
+            print("Connecting to Database")
+        try:
+            conn = get_engine(connection_string, tokenstruct).connect()
+        except sqlalchemy.exc.InterfaceError as pe:
+            if "no default driver specified" in repr(pe):
+                conn = get_engine(
+                    connection_string_fallback, tokenstruct, reset=True
+                ).connect()
+            else:
+                raise
+        except sqlalchemy.exc.DBAPIError as pe:
+            if (
+                "[unixODBC][Driver Manager]Can" in repr(pe)
+                and "open lib" in repr(pe)
+                and driver in repr(pe)
+            ):
+                conn = get_engine(
+                    connection_string_fallback, tokenstruct, reset=True
+                ).connect()
+            else:
+                raise
+    except sqlalchemy.exc.ProgrammingError as pe:
+        reset_engine()
+        if "(40615) (SQLDriverConnect)" in repr(pe):
+            if verbose:
+                print(
+                    "Fails connecting from current IP-address. Are you on Equinor network?"
+                )
+        if verbose:
+            print("Connection to db failed: ", pe)
+        raise
+    except sqlalchemy.exc.InterfaceError as pe:
+        reset_engine()
+        if "(18456) (SQLDriverConnect)" in repr(pe):
+            if verbose:
+                print("Login using token failed. Do you have access?")
+        elif verbose:
+            print("Connection to db failed: ", pe)
+        raise
+    except Exception as err:
+        reset_engine()
+        if verbose:
+            print("Connection to db failed: ", err)
+        raise
+
+    return conn
+
+
 def query(
     sql: str,
     params: Optional[dict] = None,
     verbose: Optional[bool] = False,
-):
+) -> pd.DataFrame:
+    """Wrapper to pd.read_sql. Query database and get result as pd.DataFrame
 
-    def connection_url(conn_string):
-        return URL.create("mssql+pyodbc", query={"odbc_connect": conn_string})
+    Args:
+        sql (str): SQL query to run
+        params (Optional[dict], optional): SQL parameters as dictionary. Defaults to None.
+        verbose (Optional[bool], optional): Set true to print debugging log to stdout. Defaults to False.
 
-    def get_engine(conn_url="", tokenstruct=None, reset=False):
-        global _engine
+    Returns:
+        pd.DataFrame: Table contents returned from pd.read_sql
+    """
 
-        if reset:
-            reset_engine()
-
-        if _engine is None:
-            SQL_COPT_SS_ACCESS_TOKEN = 1256
-            _engine = create_engine(
-                connection_url(conn_url),
-                connect_args={"attrs_before": {SQL_COPT_SS_ACCESS_TOKEN: tokenstruct}},
-            )
-
-        return _engine
-
-    def connect_to_db(token):
-        try:
-            # Request
-            server = "pdmprod.database.windows.net"
-            database = "pdm"
-            driver = "ODBC Driver 18 for SQL Server"  # Primary driver if available
-            driver_fallback = (
-                "ODBC Driver 17 for SQL Server"  # Fallback driver if available
-            )
-            connection_string = f"DRIVER={driver};SERVER={server};DATABASE={database}"
-            connection_string_fallback = (
-                f"DRIVER={driver_fallback};SERVER={server};DATABASE={database}"
-            )
-
-            # get bytes from token obtained
-            tokenb = bytes(token, "UTF-8")
-            exptoken = b""
-            for i in tokenb:
-                exptoken += bytes({i})
-                exptoken += bytes(1)
-
-            tokenstruct = struct.pack("=i", len(exptoken)) + exptoken
-            if verbose:
-                print("Connecting to Database")
-            try:
-                conn = get_engine(connection_string, tokenstruct).connect()
-            except sqlalchemy.exc.InterfaceError as pe:
-                if "no default driver specified" in repr(pe):
-                    conn = get_engine(
-                        connection_string_fallback, tokenstruct, reset=True
-                    ).connect()
-                else:
-                    raise
-            except sqlalchemy.exc.DBAPIError as pe:
-                if (
-                    "[unixODBC][Driver Manager]Can" in repr(pe)
-                    and "open lib" in repr(pe)
-                    and driver in repr(pe)
-                ):
-                    conn = get_engine(
-                        connection_string_fallback, tokenstruct, reset=True
-                    ).connect()
-                else:
-                    raise
-        except sqlalchemy.exc.ProgrammingError as pe:
-            reset_engine()
-            if "(40615) (SQLDriverConnect)" in repr(pe):
-                if verbose:
-                    print(
-                        "Fails connecting from current IP-address. Are you on Equinor network?"
-                    )
-            if verbose:
-                print("Connection to db failed: ", pe)
-            raise
-        except sqlalchemy.exc.InterfaceError as pe:
-            reset_engine()
-            if "(18456) (SQLDriverConnect)" in repr(pe):
-                if verbose:
-                    print("Login using token failed. Do you have access?")
-            elif verbose:
-                print("Connection to db failed: ", pe)
-            raise
-        except Exception as err:
-            reset_engine()
-            if verbose:
-                print("Connection to db failed: ", err)
-            raise
-
-        return conn
-
-    try:
-        with connect_to_db(get_token()) as connection:
-            #  Query Database
-            if verbose:
-                print("Querying database")
-            df = pd.read_sql(sql_text(sql), connection, params=params)
-
-        return df
-    except Exception as ex:
-        print(
-            "Received no data. "
-            "This may be due to the account retrieved not having sufficient access or not existing. "
-        )
+    with connect_to_db(get_token(), verbose=verbose) as connection:
+        #  Query Database
+        if verbose:
+            print("Querying database")
+        return pd.read_sql(sql_text(sql), connection, params=params)

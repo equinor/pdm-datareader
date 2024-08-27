@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "pdm-tools"
-version = "2.3.0"
+version = "2.4.0"
 description = "A small python package to execute queries to PDM without having to re-authenticate every time"
 authors = ["PDM TEAM <AWL@equinor.com>"]
 license = "MIT"

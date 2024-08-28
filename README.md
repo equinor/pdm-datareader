@@ -7,8 +7,9 @@
 [![Runs on Windows](https://img.shields.io/badge/Windows-0078D6?style=for-the-badge&logo=windows&logoColor=white)](https://img.shields.io/badge/Windows-0078D6?style=for-the-badge&logo=windows&logoColor=white)
 [![Runs on MacOS](https://img.shields.io/badge/mac%20os-000000?style=for-the-badge&logo=apple&logoColor=white)](https://img.shields.io/badge/mac%20os-000000?style=for-the-badge&logo=apple&logoColor=white)
 [![Runs on RHEL7](https://img.shields.io/badge/Red%20Hat-EE0000?style=for-the-badge&logo=redhat&logoColor=white)](https://img.shields.io/badge/Red%20Hat-EE0000?style=for-the-badge&logo=redhat&logoColor=white)
+[![SCM Compliance](https://scm-compliance-api.radix.equinor.com/repos/equinor/neqsim/badge)](https://scm-compliance-api.radix.equinor.com/repos/equinor/neqsim/badge)
 
-This is a simple python package for querying [Production Data Mart](https://wiki.equinor.com/wiki/index.php/Production_Data_Mart) tables using SQL. The package handles authentication for end users. It must be run from Equinor managed environments.
+This is a simple python package for querying [Production Data Mart](https://wiki.equinor.com/wiki/index.php/Production_Data_Mart) tables using SQL. The package handles authentication for end users with user impersonation, but also allows for inserting your own token. It must be run from Equinor managed environments connected to Equinor network.
 
 Pull requests, feature requests and issues are welcomed using the [GitHub Project Repository](https://github.com/equinor/pdm-tools) or as a ServiceNow ticket directed to Production Data Mart.
 
@@ -22,19 +23,25 @@ This driver is bundled with the [Microsoft SQL Client](https://accessit.equinor.
 
 ## Usage
 See [examples/demo.py](examples/demo.py) or try the code below that queries PDM and retrieves data:  
-```
-import datetime as dt
 
+``` python
+import datetime as dt
 from pdm_tools import tools
 
-sql = 'SELECT TOP(1) * FROM PDMVW.WELL_PROD_DAY'
-df = tools.query(sql)
-print(df)
-
-# Use parameter bindings to avoid SQL injection issues.
-sql = "SELECT top(100) * FROM PDMVW.WELL_PROD_DAY WHERE COUNTRY = :countrycode AND PROD_DAY = :startdate"
+# Example with parameter bindings to avoid SQL injection issues (recommended)
+sql = '''
+SELECT top(100) * 
+FROM PDMVW.WELL_PROD_DAY 
+WHERE COUNTRY = :countrycode 
+AND PROD_DAY = :startdate"
+'''
 df = tools.query(sql, params={'countrycode': 'NO',
                  'startdate': dt.datetime(2022, 1, 1)})
+print(df)
+
+# Example without parameters (not recommended)
+sql = 'SELECT TOP(1) * FROM PDMVW.WELL_PROD_DAY'
+df = tools.query(sql)
 print(df)
 ```
    

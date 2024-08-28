@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "pdm-tools"
-version = "2.3.2"
+version = "2.4.0"
 description = "A small python package to execute queries to PDM without having to re-authenticate every time"
 authors = ["PDM TEAM <AWL@equinor.com>"]
 license = "MIT"
@@ -13,18 +13,17 @@ classifiers = [
 ]
 
 [tool.poetry.dependencies]
-python = "^3.8,<4.0"
+python = "^3.9,<4.0"
+msal-bearer = ">0.2.1,<2.0.0"
 urllib3 = [
     { version = "<2.0.0", markers = "sys_platform=='linux'" }, # FIX for use with RHEL7 environments
 ]
-msal = "^1.26.0"
-msal-extensions = "^1.1.0"
 pyodbc = "^5.1.0"
-pandas = "^2.0.3"
+pandas = "^2.2.2"
 sqlalchemy = "^2.0.28"
 
 [tool.poetry.group.dev.dependencies]
-pytest = "^7.0.0"
+pytest = "^7.4.4"
 black = "^24.1.1"
 
 [build-system]

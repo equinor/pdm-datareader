@@ -23,19 +23,25 @@ This driver is bundled with the [Microsoft SQL Client](https://accessit.equinor.
 
 ## Usage
 See [examples/demo.py](examples/demo.py) or try the code below that queries PDM and retrieves data:  
-```
-import datetime as dt
 
+``` python
+import datetime as dt
 from pdm_tools import tools
 
-sql = 'SELECT TOP(1) * FROM PDMVW.WELL_PROD_DAY'
-df = tools.query(sql)
-print(df)
-
-# Use parameter bindings to avoid SQL injection issues.
-sql = "SELECT top(100) * FROM PDMVW.WELL_PROD_DAY WHERE COUNTRY = :countrycode AND PROD_DAY = :startdate"
+# Example with parameter bindings to avoid SQL injection issues (recommended)
+sql = '''
+SELECT top(100) * 
+FROM PDMVW.WELL_PROD_DAY 
+WHERE COUNTRY = :countrycode 
+AND PROD_DAY = :startdate"
+'''
 df = tools.query(sql, params={'countrycode': 'NO',
                  'startdate': dt.datetime(2022, 1, 1)})
+print(df)
+
+# Example without parameters (not recommended)
+sql = 'SELECT TOP(1) * FROM PDMVW.WELL_PROD_DAY'
+df = tools.query(sql)
 print(df)
 ```
    

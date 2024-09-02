@@ -12,7 +12,7 @@ jobs:
   test-deploy:
     environment:
       name: test_release
-      url: https://test.pypi.org/p/openserver
+      url: https://test.pypi.org/p/pdm-tools
     permissions:
       contents: read
       id-token: write

@@ -44,10 +44,3 @@ sql = 'SELECT TOP(1) * FROM PDMVW.WELL_PROD_DAY'
 df = tools.query(sql)
 print(df)
 ```
-   
-## Legacy
-If you wish to use an older version of this package, this can be done by passing a parameter with the pip-command, e.g.: <br>
-    ````
-    pip install pdm-datareader==2.4.0
-    ````
-

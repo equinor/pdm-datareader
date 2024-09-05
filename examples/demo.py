@@ -1,6 +1,6 @@
 import datetime as dt
 
-from pdm_tools import tools
+from pdm_datareader import tools
 
 sql = "SELECT TOP(1) * FROM PDMVW.WELL_PROD_DAY"
 df = tools.query(sql)

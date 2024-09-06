@@ -8,6 +8,7 @@
 [![Runs on MacOS](https://img.shields.io/badge/mac%20os-000000?style=for-the-badge&logo=apple&logoColor=white)](https://img.shields.io/badge/mac%20os-000000?style=for-the-badge&logo=apple&logoColor=white)
 [![Runs on RHEL7](https://img.shields.io/badge/Red%20Hat-EE0000?style=for-the-badge&logo=redhat&logoColor=white)](https://img.shields.io/badge/Red%20Hat-EE0000?style=for-the-badge&logo=redhat&logoColor=white)
 [![SCM Compliance](https://scm-compliance-api.radix.equinor.com/repos/equinor/neqsim/badge)](https://scm-compliance-api.radix.equinor.com/repos/equinor/neqsim/badge)
+![PyPI - Version](https://img.shields.io/pypi/v/pdm-datareader)
 
 `pdm-datareader` is a python package for querying [Production Data Mart](https://wiki.equinor.com/wiki/index.php/Production_Data_Mart) tables using SQL. The package handles authentication for end users with user impersonation, but also allows for inserting your own token. It must be run from Equinor managed environments connected to Equinor network.
 

@@ -12,6 +12,7 @@ from msal_bearer.BearerAuth import BearerAuth, get_login_name
 
 _engine = None
 _token = ""
+_user_name = ""
 
 
 def set_token(token: str):
@@ -24,15 +25,31 @@ def set_token(token: str):
     _token = token
 
 
-def get_token() -> str:
+def get_token(username: str = "") -> str:
     """Getter for authentication token. Will return auth token using user-impersonation if no token is set using set_token.
+
+    Args:
+        username (str, optional): User name (email address) of user to get token for.
 
     Returns:
         str: Authentication token string
     """
+
     if not _token:
+        global _user_name
+
+        if not username:
+            if not _user_name:
+                _user_name = get_login_name()
+            username = _user_name
+        else:
+            _user_name = username
+
         # SHORTNAME@equinor.com -- short name shall be capitalized
-        username = get_login_name().upper() + "@equinor.com"
+        username = username.upper()  # Also capitalize equinor.com
+        if not username.endswith("@EQUINOR.COM"):
+            username = username + "@EQUINOR.COM"
+
         tenantID = "3aa4a235-b6e2-48d5-9195-7fcf05b459b0"
         clientID = "9ed0d36d-1034-475a-bdce-fa7b774473fb"
         scopes = ["https://database.windows.net/.default"]

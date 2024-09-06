@@ -26,7 +26,7 @@ See [examples/demo.py](examples/demo.py) or try the code below that queries PDM 
 
 ``` python
 import datetime as dt
-from pdm_datareader import tools
+from pdm_datareader import query
 
 # Example with parameter bindings to avoid SQL injection issues (recommended)
 sql = '''
@@ -35,12 +35,12 @@ FROM PDMVW.WELL_PROD_DAY
 WHERE COUNTRY = :countrycode 
 AND PROD_DAY = :startdate"
 '''
-df = tools.query(sql, params={'countrycode': 'NO',
+df = query(sql, params={'countrycode': 'NO',
                  'startdate': dt.datetime(2022, 1, 1)})
 print(df)
 
 # Example without parameters (not recommended)
 sql = 'SELECT TOP(1) * FROM PDMVW.WELL_PROD_DAY'
-df = tools.query(sql)
+df = query(sql)
 print(df)
 ```

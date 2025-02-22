@@ -8,7 +8,8 @@ from sqlalchemy import create_engine
 from sqlalchemy import text as sql_text
 from sqlalchemy.engine import URL
 
-from msal_bearer.BearerAuth import BearerAuth, get_login_name
+from msal_bearer import BearerAuth, get_user_name
+
 
 _engine = None
 _token = ""
@@ -40,7 +41,7 @@ def get_token(username: str = "") -> str:
 
         if not username:
             if not _user_name:
-                _user_name = get_login_name()
+                _user_name = get_user_name()
             username = _user_name
         else:
             _user_name = username

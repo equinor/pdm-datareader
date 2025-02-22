@@ -2,7 +2,7 @@ import shutil
 import pathlib
 
 from pdm_datareader import query
-from msal_bearer.BearerAuth import set_token_location
+from msal_bearer.bearerauth import set_token_location
 
 
 def replace_file(filename: str) -> str:

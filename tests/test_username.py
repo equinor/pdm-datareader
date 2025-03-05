@@ -1,4 +1,4 @@
-from msal_bearer.BearerAuth import get_login_name
+from msal_bearer.bearerauth import get_login_name
 from pdm_datareader.tools import get_token
 
 

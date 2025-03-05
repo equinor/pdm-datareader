@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "pdm-datareader"
-version = "2.5.0"
+version = "2.5.1"
 description = "A small python package to execute queries to PDM without having to re-authenticate every time"
 authors = ["PDM TEAM <AWL@equinor.com>"]
 license = "MIT"
@@ -13,8 +13,8 @@ classifiers = [
 ]
 
 [tool.poetry.dependencies]
-python = "^3.9,<4.0"
-msal-bearer = ">0.2.1,<2.0.0"
+python = "^3.9.2,<4.0"
+msal-bearer = ">=1.3.0,<2.0.0"
 urllib3 = [
     { version = "<2.0.0", markers = "sys_platform=='linux'" }, # FIX for use with RHEL7 environments
 ]

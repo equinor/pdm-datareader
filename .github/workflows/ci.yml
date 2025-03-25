@@ -17,15 +17,19 @@ jobs:
       contents: read
       id-token: write
     
+    strategy:
+      matrix:
+        python-version: ["3.11", "3.12"]
+
     runs-on: ubuntu-latest  
     steps:
       - name: "Check out code"
         uses: actions/checkout@v3
       
-      - name: "Set up Python"
-        uses: actions/setup-python@v4
+      - name: "Set up Python ${{ matrix.python-version }}"
+        uses: actions/setup-python@v5
         with:          
-          python-version: 3.9
+          python-version: ${{ matrix.python-version }}
       
       - name: "Installs dependencies"            
         run: |

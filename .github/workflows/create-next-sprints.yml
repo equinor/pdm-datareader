@@ -1,0 +1,158 @@
+name: Create Next Sprints
+
+on:
+  # Run on the 1st day of every month at 07:00 UTC
+  schedule:
+    - cron: "0 7 1 * *"
+
+  # Allow manual execution
+  workflow_dispatch: {}
+
+permissions:
+  issues: write
+
+jobs:
+  ensure-next-sprints:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ensure next sprint milestones exist
+        uses: actions/github-script@v8
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const owner = context.repo.owner;
+            const repo  = context.repo.repo;
+
+            // ---- CONFIG ----
+            const PREFIX = "Sprint-";       // Sprint name pattern: Sprint-123
+            const SPRINT_DAYS = 14;         // 2-week sprints
+            const CREATE_COUNT = 2;         // create next 2 sprints if missing
+            const CREATE_DUE_DATES = true;  // set milestone due_on
+            // ----------------
+
+            const titleRegex = new RegExp(`^${PREFIX}(\\d+)$`);
+
+            function addDays(d, days) {
+              const x = new Date(d);
+              x.setUTCDate(x.getUTCDate() + days);
+              return x;
+            }
+
+            function utcStartOfDay(d) {
+              return new Date(Date.UTC(
+                d.getUTCFullYear(),
+                d.getUTCMonth(),
+                d.getUTCDate(),
+                0, 0, 0
+              ));
+            }
+
+            function utcEndOfDay(d) {
+              return new Date(Date.UTC(
+                d.getUTCFullYear(),
+                d.getUTCMonth(),
+                d.getUTCDate(),
+                23, 59, 59
+              ));
+            }
+
+            // 1) Fetch all milestones (open + closed)
+            const milestones = await github.paginate(
+              github.rest.issues.listMilestones,
+              {
+                owner,
+                repo,
+                state: "all",
+                per_page: 100
+              }
+            );
+
+            // 2) Find the highest Sprint-### milestone
+            let maxN = 0;
+            let lastSprint = null;
+            const existingTitles = new Set();
+
+            for (const m of milestones) {
+              existingTitles.add(m.title);
+              const match = m.title.match(titleRegex);
+              if (!match) continue;
+
+              const n = parseInt(match[1], 10);
+              if (Number.isFinite(n) && n > maxN) {
+                maxN = n;
+                lastSprint = m;
+              }
+            }
+
+            if (!lastSprint) {
+              throw new Error(
+                `No existing "${PREFIX}###" milestones found. Create the first sprint manually (e.g. ${PREFIX}1) with a due date.`
+              );
+            }
+
+            if (!lastSprint.due_on) {
+              throw new Error(
+                `Last sprint "${lastSprint.title}" has no due_on date. Add a due date so new sprints can be chained correctly.`
+              );
+            }
+
+            core.info(`Last sprint detected: ${lastSprint.title} (due_on=${lastSprint.due_on})`);
+
+            // 3) Compute base start for next sprint
+            // Last sprint ends Thu 23:59:59 UTC → next sprint starts Fri 00:00 UTC
+            const lastDue = new Date(lastSprint.due_on);
+            const lastEndDate = utcStartOfDay(lastDue);   // Thu 00:00 (date portion)
+            const baseNextStart = addDays(lastEndDate, 1);
+
+            core.info(`Next sprint base start (UTC): ${baseNextStart.toISOString()}`);
+
+            // 4) Create next CREATE_COUNT sprints, chained sequentially
+            const created = [];
+
+            for (let i = 1; i <= CREATE_COUNT; i++) {
+              const sprintNum = maxN + i;
+              const title = `${PREFIX}${sprintNum}`;
+
+              if (existingTitles.has(title)) {
+                core.info(`Milestone already exists: ${title} (skipping)`);
+                continue;
+              }
+
+              // Sprint starts Friday, ends Thursday (14 days total)
+              const sprintStart = addDays(baseNextStart, (i - 1) * SPRINT_DAYS);
+              const sprintEndDate = addDays(sprintStart, SPRINT_DAYS - 1);
+              const sprintDue = utcEndOfDay(sprintEndDate);
+
+              const description = [
+                `Auto-created sprint milestone.`,
+                `Sprint window (UTC): ${sprintStart.toISOString().slice(0, 10)} (Fri) – ${sprintEndDate.toISOString().slice(0, 10)} (Thu).`,
+                ``,
+                `Use for sprint planning and tracking.`
+              ].join("\n");
+
+              const payload = {
+                owner,
+                repo,
+                title,
+                description
+              };
+
+              if (CREATE_DUE_DATES) {
+                payload.due_on = sprintDue.toISOString();
+              }
+
+              const res = await github.rest.issues.createMilestone(payload);
+              created.push({ title, number: res.data.number });
+
+              core.notice(
+                `Created milestone: ${title} (#${res.data.number}) due_on=${payload.due_on}`
+              );
+            }
+
+            if (created.length === 0) {
+              core.notice("No new sprint milestones needed — next sprints already exist.");
+            } else {
+              core.notice(
+                `Created ${created.length} milestone(s): ${created.map(x => x.title).join(", ")}`
+              );
+            }

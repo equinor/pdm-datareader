@@ -1,0 +1,36 @@
+name: Issue AI Workflow
+
+on:
+  issues:
+    types: [opened]
+
+jobs:
+  assign-copilot:
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Assign Copilot to issue
+        uses: github/assign-copilot-to-issue@v1
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+  lint-pr:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - name: Check out code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+
+      - name: Set up Python
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405
+        with:
+          python-version: "3.12"
+
+      - name: Install linter
+        run: pip install ruff
+
+      - name: Run PEP8 lint check
+        run: ruff check . --select E,W --output-format github

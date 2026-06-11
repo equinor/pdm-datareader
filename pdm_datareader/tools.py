@@ -174,8 +174,12 @@ def query(
         pd.DataFrame: Table contents returned from pd.read_sql
     """
 
+    stmt = sql_text(sql)
+    if params:
+        stmt = stmt.bindparams(**params)
+
     with connect_to_db(get_token(), verbose=verbose) as connection:
         #  Query Database
         if verbose:
             print("Querying database")
-        return pd.read_sql(sql_text(sql), connection, params=params)
+        return pd.read_sql(stmt, connection)

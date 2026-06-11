@@ -18,15 +18,65 @@ jobs:
       contents: write
       pull-requests: write
     steps:
-      - name: Request Copilot to create PR
+      - name: Assign Copilot to issue
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3
         with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
+          github-token: ${{ secrets.COPILOT_PAT }}
           script: |
-            const issueNumber = context.payload.inputs?.issue_number || context.issue.number;
-            github.rest.issues.createComment({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: issueNumber,
-              body: '@copilot /create-pr'
+            const issueNumber = Number(context.payload.inputs?.issue_number || context.issue.number);
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+
+            // 1. Find the Copilot bot via suggestedActors
+            const actorsQuery = `
+              query($owner: String!, $repo: String!) {
+                repository(owner: $owner, name: $repo) {
+                  id
+                  suggestedActors(capabilities: [CAN_BE_ASSIGNED], first: 100) {
+                    nodes {
+                      login
+                      __typename
+                      ... on Bot { id }
+                      ... on User { id }
+                    }
+                  }
+                }
+              }`;
+            const actorsResult = await github.graphql(actorsQuery, { owner, repo });
+            const repositoryId = actorsResult.repository.id;
+            const copilot = actorsResult.repository.suggestedActors.nodes
+              .find(node => node.login === 'copilot-swe-agent');
+
+            if (!copilot) {
+              core.setFailed('Copilot coding agent is not available as an assignee for this repository. Ensure it is enabled for your org and the token has the correct permissions.');
+              return;
+            }
+
+            // 2. Get the issue's global node ID
+            const issueQuery = `
+              query($owner: String!, $repo: String!, $number: Int!) {
+                repository(owner: $owner, name: $repo) {
+                  issue(number: $number) { id title }
+                }
+              }`;
+            const issueResult = await github.graphql(issueQuery, { owner, repo, number: issueNumber });
+            const issueId = issueResult.repository.issue.id;
+
+            // 3. Assign Copilot to the issue
+            const assignMutation = `
+              mutation($assignableId: ID!, $actorIds: [ID!]!) {
+                replaceActorsForAssignable(input: { assignableId: $assignableId, actorIds: $actorIds }) {
+                  assignable {
+                    ... on Issue {
+                      number
+                      assignees(first: 10) { nodes { login } }
+                    }
+                  }
+                }
+              }`;
+            await github.graphql(assignMutation, {
+              assignableId: issueId,
+              actorIds: [copilot.id]
             });
+
+            core.info(`Assigned Copilot to issue #${issueNumber}. It will create a pull request shortly.`);

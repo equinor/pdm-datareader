@@ -4,7 +4,7 @@
 `pdm-datareader` is a Python package for querying Production Data Mart (PDM) tables using SQL. It provides authentication handling for Equinor environments with user impersonation capabilities.
 
 ## Tech Stack
-- **Language**: Python 3.9.2 - 3.12
+- **Language**: Python 3.11 - 3.12
 - **Build Tool**: Poetry
 - **Testing**: pytest
 - **Dependencies**: pyodbc, pandas, sqlalchemy, msal-bearer, urllib3

@@ -2,7 +2,6 @@ import shutil
 import pathlib
 
 from pdm_datareader import query
-import pandas as pd 
 from msal_bearer.bearerauth import set_token_location
 
 

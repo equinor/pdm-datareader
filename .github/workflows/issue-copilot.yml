@@ -1,4 +1,4 @@
-name: Issue AI Workflow
+name: Assign Copilot to Issue
 
 on:
   issues:
@@ -9,28 +9,27 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       issues: write
-      contents: write
-      pull-requests: write
     steps:
       - name: Assign Copilot to issue
-        uses: github/assign-copilot-to-issue@v1
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            github.rest.issues.addAssignees({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              assignees: ['copilot']
+            });
 
-  lint-pr:
-    runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request'
-    steps:
-      - name: Check out code
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
-
-      - name: Set up Python
-        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405
+      - name: Add comment
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3
         with:
-          python-version: "3.12"
-
-      - name: Install linter
-        run: pip install ruff
-
-      - name: Run PEP8 lint check
-        run: ruff check . --select E,W --output-format github
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: '🤖 Copilot has been assigned to this issue and will create a pull request with proposed changes.'
+            });

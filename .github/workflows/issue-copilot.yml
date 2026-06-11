@@ -3,6 +3,12 @@ name: Assign Copilot to Issue
 on:
   issues:
     types: [opened]
+  workflow_dispatch:
+    inputs:
+      issue_number:
+        description: 'Issue number to assign to Copilot'
+        required: true
+        type: number
 
 jobs:
   assign-copilot:
@@ -17,9 +23,10 @@ jobs:
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
+            const issueNumber = context.payload.inputs?.issue_number || context.issue.number;
             github.rest.issues.createComment({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              issue_number: context.issue.number,
+              issue_number: issueNumber,
               body: '@copilot /create-pr'
             });

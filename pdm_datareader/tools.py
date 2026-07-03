@@ -116,7 +116,8 @@ def get_engine(conn_url: str = "", tokenstruct: Optional[bytes] = None, reset: b
     # including transitions to or from None. The token is baked into the
     # connection via attrs_before, so reusing a cached engine across identities
     # would run queries under the wrong user.
-    if _engine is not None and _token_key(tokenstruct) != _engine_token:
+    token_key = _token_key(tokenstruct)
+    if _engine is not None and token_key != _engine_token:
         reset_engine()
 
     # Rebuild the engine once it exceeds its TTL so a stale, likely-expired
@@ -133,7 +134,7 @@ def get_engine(conn_url: str = "", tokenstruct: Optional[bytes] = None, reset: b
             URL.create("mssql+pyodbc", query={"odbc_connect": conn_url}),
             connect_args={"attrs_before": {SQL_COPT_SS_ACCESS_TOKEN: tokenstruct}},
         )
-        _engine_token = _token_key(tokenstruct)
+        _engine_token = token_key
         _engine_created_at = time.monotonic()
 
     return _engine

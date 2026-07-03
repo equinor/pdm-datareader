@@ -4,7 +4,7 @@
 `pdm-datareader` is a Python package for querying Production Data Mart (PDM) tables using SQL. It provides authentication handling for Equinor environments with user impersonation capabilities.
 
 ## Tech Stack
-- **Language**: Python 3.11 - 3.12
+- **Language**: Python 3.11 - 3.13
 - **Build Tool**: Poetry
 - **Testing**: pytest
 - **Dependencies**: pyodbc, pandas, sqlalchemy, msal-bearer, urllib3
@@ -25,9 +25,9 @@ pytest
 ```
 
 ### Linting & Formatting
+`black` is the configured formatter (dev dependency). Format before committing:
 ```bash
 black .
-ruff check . --select E,W
 ```
 
 ### Building & Publishing
@@ -35,11 +35,29 @@ Poetry handles packaging and distribution via PyPI.
 
 ## Code Standards & Guidelines
 
-1. **Python Style**: Follow PEP 8 conventions
-2. **Type Hints**: Use type hints where possible for better IDE support
-3. **Docstrings**: Include docstrings for all public functions
-4. **Testing**: All features must have corresponding unit tests
-5. **Authentication**: Use `msal-bearer` for Equinor AD authentication; never hardcode credentials
+1. **Python Style**: Follow PEP 8 conventions (see the PEP 8 Style Guide section below)
+2. **Formatting**: Run `black .` to auto-format; do not hand-format against black's output
+3. **Type Hints**: Use type hints on all public functions; import from `typing` (e.g. `Optional`)
+4. **Docstrings**: Include Google-style docstrings for all public functions (Args/Returns)
+5. **Testing**: All features must have corresponding unit tests
+6. **Authentication**: Use `msal-bearer` for Equinor AD authentication; never hardcode credentials
+
+## PEP 8 Style Guide
+
+Follow PEP 8 as enforced by `black`. Key conventions used in this codebase:
+
+- **Indentation**: 4 spaces per level; never use tabs.
+- **Line length**: Keep lines to black's default (88 chars); wrap long call arguments one per line.
+- **Naming**:
+  - `snake_case` for functions, variables, and module-level names (`get_token`, `connect_to_db`).
+  - Module-private globals are prefixed with a single underscore (`_engine`, `_token`, `_user_name`).
+  - `UPPER_CASE` for constants (`SQL_COPT_SS_ACCESS_TOKEN`).
+- **Imports**: Group in order — standard library, third-party, then local — separated by blank lines. One import per line.
+- **Type hints**: Annotate parameters and return types (`def query(sql: str, params: Optional[dict] = None) -> pd.DataFrame`).
+- **Docstrings**: Google-style with `Args:` and `Returns:` sections, matching existing functions in `tools.py`.
+- **Whitespace**: No trailing whitespace; two blank lines between top-level functions; no spaces inside parentheses.
+- **Global state**: When mutating module-level globals (`_engine`, `_token`), declare `global` at the top of the function, as done in `tools.py`.
+- **Comparisons/booleans**: Use `if not x:` for emptiness checks rather than `if x == ""` or `len(x) == 0`.
 
 ## Common Tasks
 
@@ -69,3 +87,7 @@ Poetry handles packaging and distribution via PyPI.
 - README.md: Installation and basic usage
 - examples/demo.py: Practical usage examples
 - tests/: Test cases demonstrating features
+
+## Documentation
+- Update README.md for any new features
+- Include inline comments for complex logic

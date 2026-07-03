@@ -77,6 +77,24 @@ Follow PEP 8 as enforced by `black`. Key conventions used in this codebase:
 - Test thoroughly with `pytest` to ensure no breaking changes
 - Document any breaking changes in PR description
 
+## Versioning
+
+Bump the `version` field under `[tool.poetry]` in `pyproject.toml` for every
+change, following [Semantic Versioning](https://semver.org/) (`MAJOR.MINOR.MICRO`):
+
+- **MAJOR**: Increment for breaking changes that are **not** backward compatible
+  (e.g. removing or renaming public functions, changing function signatures or
+  return types). Reset MINOR and MICRO to `0`.
+- **MINOR**: Increment when new functionality or features are added, such as new
+  functions within existing modules/classes. Always backward compatible within
+  the same MAJOR version. Reset MICRO to `0`.
+- **MICRO** (patch): Increment for bug fixes and minor, non-breaking changes that
+  improve existing functionality. No new features — only improvements and fixes.
+
+Example: `2.5.4` → `2.5.5` (bug fix), → `2.6.0` (new feature), → `3.0.0`
+(breaking change).
+
+
 ## Important Notes
 - This package must run from Equinor managed environments
 - Authentication requires ODBC Driver for SQL Server (v17 or v18)

@@ -12,6 +12,7 @@ from msal_bearer import BearerAuth, get_user_name
 
 
 _engine = None
+_engine_token = None
 _token = ""
 _user_name = ""
 
@@ -63,9 +64,33 @@ def get_token(username: str = "") -> str:
 
 
 def get_engine(conn_url: str = "", tokenstruct=None, reset: bool = False):
-    global _engine
+    """Get a cached SQLAlchemy engine, creating one if needed.
+
+    The engine is cached at module level and scoped to the token it was
+    created with. It is rebuilt automatically when ``reset`` is True or when
+    ``tokenstruct`` differs from the token of the cached engine, to avoid
+    reusing another identity's connection.
+
+    Args:
+        conn_url (str, optional): ODBC connection string used to build the
+            engine when a new one is created. Defaults to "".
+        tokenstruct (optional): Packed access token struct passed to the driver
+            via ``attrs_before``. Defaults to None.
+        reset (bool, optional): Force disposal of any existing engine before
+            returning. Defaults to False.
+
+    Returns:
+        sqlalchemy.engine.Engine: The cached or newly created engine.
+    """
+    global _engine, _engine_token
 
     if reset:
+        reset_engine()
+
+    # Rebuild the engine if it was created for a different token (identity).
+    # The token is baked into the connection via attrs_before, so reusing a
+    # cached engine across users would run queries under the wrong identity.
+    if _engine is not None and tokenstruct is not None and tokenstruct != _engine_token:
         reset_engine()
 
     if _engine is None:
@@ -74,17 +99,20 @@ def get_engine(conn_url: str = "", tokenstruct=None, reset: bool = False):
             URL.create("mssql+pyodbc", query={"odbc_connect": conn_url}),
             connect_args={"attrs_before": {SQL_COPT_SS_ACCESS_TOKEN: tokenstruct}},
         )
+        _engine_token = tokenstruct
 
     return _engine
 
 
 def reset_engine():
     """Reset connection engine"""
-    global _engine
+    global _engine, _engine_token
 
     if _engine is not None:
         _engine.dispose()
         _engine = None
+
+    _engine_token = None
 
 
 def connect_to_db(token, verbose=False):
@@ -164,9 +192,21 @@ def query(
     verbose: Optional[bool] = False,
 ) -> pd.DataFrame:
     """Wrapper to pd.read_sql. Query database and get result as pd.DataFrame
+        Security:
+        Always pass user-supplied values through ``params`` so they are bound
+        as SQL parameters. Never build ``sql`` by string-formatting or
+        concatenating untrusted input, as this exposes the query to SQL
+        injection.
+
+        Safe::
+
+            query("SELECT * FROM t WHERE id = :id", params={"id": user_id})
+
+        Unsafe::
+
+            query(f"SELECT * FROM t WHERE id = {user_id}")
 
     Args:
-        sql (str): SQL query to run
         params (Optional[dict], optional): SQL parameters as dictionary. Defaults to None.
         verbose (Optional[bool], optional): Set true to print debugging log to stdout. Defaults to False.
 

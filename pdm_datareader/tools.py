@@ -87,7 +87,7 @@ def get_token(username: str = "") -> str:
     return _token
 
 
-def get_engine(conn_url: str = "", tokenstruct=None, reset: bool = False):
+def get_engine(conn_url: str = "", tokenstruct: Optional[bytes] = None, reset: bool = False) -> "sqlalchemy.engine.Engine":
     """Get a cached SQLAlchemy engine, creating one if needed.
 
     The engine is cached at module level and scoped to the token it was

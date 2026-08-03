@@ -34,7 +34,7 @@ sql = '''
 SELECT top(100) * 
 FROM PDMVW.WELL_PROD_DAY 
 WHERE COUNTRY = :countrycode 
-AND PROD_DAY = :startdate"
+AND PROD_DAY = :startdate
 '''
 df = query(sql, params={'countrycode': 'NO',
                  'startdate': dt.datetime(2022, 1, 1)})

@@ -31,7 +31,11 @@ black .
 ```
 
 ### Building & Publishing
-Poetry handles packaging and distribution via PyPI.
+Poetry handles packaging and distribution via PyPI. Use the
+`packaging-python-libraries` skill
+(`.github/skills/python/packaging-python-libraries/SKILL.md`) for building the
+sdist/wheel, validating with twine, verifying wheel contents, and publishing to
+PyPI.
 
 ## Code Standards & Guidelines
 
@@ -68,7 +72,8 @@ Follow PEP 8 as enforced by `black`. Key conventions used in this codebase:
 
 ### When adding features:
 - Add the feature to appropriate module in `pdm_datareader/`
-- Write unit tests in `tests/`
+- Write unit tests in `tests/` (use the `testing-patterns` skill,
+  `.github/skills/python/testing-patterns/SKILL.md`)
 - Update `examples/demo.py` if it's a user-facing feature
 - Update docstrings in the main module
 
@@ -76,6 +81,22 @@ Follow PEP 8 as enforced by `black`. Key conventions used in this codebase:
 - Update `pyproject.toml` with new version constraints
 - Test thoroughly with `pytest` to ensure no breaking changes
 - Document any breaking changes in PR description
+
+### When packaging or publishing a release:
+- Use the `packaging-python-libraries` skill
+  (`.github/skills/python/packaging-python-libraries/SKILL.md`) for Poetry-based
+  builds, twine metadata/wheel-content checks, clean-install verification, and
+  publishing to TestPyPI/PyPI
+
+### When writing tests:
+- Use the `testing-patterns` skill
+  (`.github/skills/python/testing-patterns/SKILL.md`) for mocking pyodbc/
+  SQLAlchemy engines and Azure AD tokens, resetting module globals, and
+  token-leak regression tests
+
+### When reviewing security:
+- Use the `security-audit` skill (`.github/skills/python/security-audit/SKILL.md`)
+  for auditing SQL injection, token/credential leaks, and dependency scanning
 
 ## Versioning
 

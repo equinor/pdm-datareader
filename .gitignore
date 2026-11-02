@@ -71,3 +71,9 @@ tests/tmp/
 
 .vscode/
 .DS_Store
+
+# Local planning docs
+MIGRATION_PLAN.md
+
+# Local test setup (credentials, scratch scripts)
+local/

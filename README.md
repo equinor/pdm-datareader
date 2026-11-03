@@ -62,7 +62,7 @@ import pdm_datareader as pdm
 pdm.ping()          # e.g. {'version': '3.0', 'databaseCheckPassed': True}
 ```
 
-The first call opens a browser window to sign in with your Equinor account; the same sign-in is used to read the subscription key from Key Vault. Later calls reuse the sign-in silently. If you have several Equinor accounts, choose one with `pdm.get_api_token(username="abcd")` (short name or full email address) before your first call.
+The first call opens a browser window to sign in with your Equinor account; the same sign-in is used to read the subscription key from Key Vault. Later calls reuse the sign-in silently. If you have several Equinor accounts, complete the browser sign-in with the account you want to use.
 
 ### 3. Read data
 ```python

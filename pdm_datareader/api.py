@@ -110,13 +110,10 @@ ENVIRONMENTS: Dict[str, ApiEnvironment] = {
 }
 
 _environment_name = ""
-_api_token = ""
-_api_user_name = ""
 _subscription_key = ""
 # Subscription keys read from Key Vault, keyed by (vault URL, secret name).
 # Kept in memory only, never written to disk.
 _vault_keys: Dict[Tuple[str, str], str] = {}
-_session: Optional[requests.Session] = None
 # Connector sessions are keyed by (client ID, scope), keeping API and Key Vault
 # credentials and connection pools separate.
 _connectors: Dict[Tuple[str, str], APIConnector] = {}
@@ -163,8 +160,6 @@ def set_environment(name: str) -> None:
 
     Takes precedence over the ``PDM_API_ENV`` environment variable. Pass an
     empty string to fall back to ``PDM_API_ENV`` or the default (``"prod"``).
-    A token set with :func:`set_api_token` is not cleared when switching, so
-    set a token for the new environment as well if you use one.
 
     Args:
         name (str): One of the keys in :data:`ENVIRONMENTS` (``"prod"``,
@@ -214,20 +209,6 @@ def get_environment() -> ApiEnvironment:
     )
 
 
-def set_api_token(token: str) -> None:
-    """Set an API access token explicitly instead of using user-impersonation.
-
-    This is separate from :func:`pdm_datareader.tools.set_token`, which holds
-    the token for the direct database connection. Pass an empty string to go
-    back to user-impersonation.
-
-    Args:
-        token (str): Access token for the PDM API.
-    """
-    global _api_token
-    _api_token = token
-
-
 def _normalize_username(username: str) -> str:
     """Normalize a user name for the token cache lookup.
 
@@ -274,32 +255,6 @@ def _username_from_token(token: str) -> str:
     return ""
 
 
-def get_api_token(username: str = "") -> str:
-    """Get an access token for the PDM API.
-
-    Returns the token set with :func:`set_api_token` if any. Otherwise gets a
-    token for the active environment through ``eq-api-connector``, silently
-    from its cache when possible and interactively (browser login) when needed.
-
-    The account is chosen in this order: ``username`` if given, then the
-    account used for the previous API token in this session, then the
-    account already in the token cache (if there are several, the first is
-    used; pass ``username`` to choose). The Windows login name is not used,
-    as it often differs from the Equinor account name.
-
-    Args:
-        username (str, optional): Short name or email address of the account
-            to use, e.g. ``"abcd"`` or ``"abcd@equinor.com"``.
-
-    Returns:
-        str: Access token string.
-    """
-    if _api_token:
-        return _api_token
-
-    return _acquire_token(get_environment().scope, username)
-
-
 def _get_connector(client_id: str, scope: str) -> APIConnector:
     """Get the cached ``APIConnector`` for a client ID and scope, creating it if needed.
 
@@ -317,10 +272,27 @@ def _get_connector(client_id: str, scope: str) -> APIConnector:
             tenant_id=TENANT_ID,
             client_id=client_id,
             scope=[scope],
-            user_name=_api_user_name or None,
+            user_name=_connector_username(client_id),
         )
         _connectors[key] = connector
     return connector
+
+
+def _connector_username(client_id: str) -> Optional[str]:
+    """Return the account selected by another connector for this client."""
+    for (cached_client_id, _), connector in _connectors.items():
+        if cached_client_id == client_id and connector.authenticator is not None:
+            username = connector.authenticator.user_name
+            if username:
+                return username
+    return None
+
+
+def _set_connector_username(client_id: str, username: str) -> None:
+    """Keep cached scope connectors on the same signed-in account."""
+    for (cached_client_id, _), connector in _connectors.items():
+        if cached_client_id == client_id and connector.authenticator is not None:
+            connector.authenticator.user_name = username
 
 
 def _reset_connectors() -> None:
@@ -333,8 +305,7 @@ def _reset_connectors() -> None:
 def _acquire_token(scope: str, username: str = "") -> str:
     """Get a user token for ``scope`` through ``eq-api-connector``.
 
-    Shared by the API and Key Vault tokens so both use the same account
-    selection (see :func:`get_api_token`).
+    Shared by PDM API and Key Vault token acquisition.
 
     Args:
         scope (str): Scope to request, e.g. the API or Key Vault scope.
@@ -343,23 +314,27 @@ def _acquire_token(scope: str, username: str = "") -> str:
     Returns:
         str: Access token string.
     """
-    global _api_user_name
+    client_id = get_environment().client_id
+    username_hint = (
+        _normalize_username(username) if username else _connector_username(client_id)
+    )
+    if username_hint:
+        _set_connector_username(client_id, username_hint)
 
-    if username:
-        _api_user_name = _normalize_username(username)
-
-    connector = _get_connector(get_environment().client_id, scope)
+    connector = _get_connector(client_id, scope)
     # APIConnector falls back to the OS login name when no user is given. That
     # name often differs from the Equinor account, so clear it and let the
-    # token cache pick the account instead (see get_api_token).
+    # token cache pick the account when no account hint is available.
     authenticator = connector.authenticator
     if authenticator is None:
         raise PdmAuthError("Could not initialize the API token authenticator.")
-    authenticator.user_name = _api_user_name or None
+    authenticator.user_name = username_hint
     token = connector.get_token()
     # Remember the account actually signed in with, so the next call finds it
     # in the token cache instead of opening a new browser login.
-    _api_user_name = _username_from_token(token) or _api_user_name
+    selected_username = _username_from_token(token)
+    if selected_username:
+        _set_connector_username(client_id, _normalize_username(selected_username))
     return token
 
 
@@ -450,11 +425,16 @@ def _get_key_from_vault(refresh: bool = False) -> str:
         f"To use a key directly instead, set {ENV_VAR_SUBSCRIPTION_KEY} or call "
         "set_subscription_key(...)."
     )
+    token = _acquire_token(KEY_VAULT_SCOPE)
+    connector = _get_connector(env.client_id, KEY_VAULT_SCOPE)
+    connector.session.headers.update(
+        {"User-Agent": _user_agent(), "Accept": "application/json"}
+    )
     try:
-        response = _get_session().get(
+        response = connector.session.get(
             f"{vault_url}/secrets/{secret}",
             params={"api-version": KEY_VAULT_API_VERSION},
-            headers={"Authorization": "Bearer " + _acquire_token(KEY_VAULT_SCOPE)},
+            headers={"Authorization": "Bearer " + token},
             timeout=(_CONNECT_TIMEOUT_SECONDS, _KEY_VAULT_TIMEOUT_SECONDS),
         )
     except requests.RequestException as err:
@@ -881,34 +861,6 @@ def _user_agent() -> str:
     return f"pdm-datareader/{package_version}"
 
 
-def _get_session() -> requests.Session:
-    """Get the cached, key-free HTTP session used for Key Vault requests.
-
-    The Key Vault bearer token is added per request. PDM API calls use the
-    retry-enabled session owned by ``APIConnector``.
-
-    Returns:
-        requests.Session: The shared session.
-    """
-    global _session
-
-    if _session is None:
-        _session = requests.Session()
-        _session.headers.update(
-            {"User-Agent": _user_agent(), "Accept": "application/json"}
-        )
-    return _session
-
-
-def _reset_session() -> None:
-    """Close and drop the cached HTTP session."""
-    global _session
-
-    if _session is not None:
-        _session.close()
-        _session = None
-
-
 def _error_details(response: requests.Response) -> Tuple[str, Optional[str]]:
     """Extract a message and trace ID from an error response.
 
@@ -1022,7 +974,7 @@ def _request(
     while True:
         if verbose:
             print(f"GET {path} ({env.name})")
-        token = get_api_token()
+        token = _acquire_token(env.scope)
         try:
             response = connector.session.get(
                 url,

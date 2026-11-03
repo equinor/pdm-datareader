@@ -15,7 +15,7 @@
 - **Through the PDM API** (recommended for new users) — read one PDM view at a time with filters, column selection and sorting. No ODBC driver or Equinor network connection needed. See [API usage](#api-usage).
 - **With SQL directly against the PDM database** — full SQL, but requires the ODBC driver and the Equinor network. Will be deprecated in a future release. See [SQL usage](#sql-usage).
 
-Both handle authentication for end users with user impersonation (sign-in with your Equinor account), and both return only the data your PDM field access allows.
+Both handle authentication for end users with user impersonation (sign-in with your Equinor account), and both return only the data your PDM field access allows. The API path signs in through [eq-api-connector](https://pypi.org/project/eq-api-connector/); the SQL path uses [msal-bearer](https://pypi.org/project/msal-bearer/) directly. Both share the same token cache, so one sign-in serves both.
 
 Pull requests, feature requests and issues are welcomed using the [GitHub Project Repository](https://github.com/equinor/pdm-datareader) or as a ServiceNow ticket directed to Production Data Mart.
 

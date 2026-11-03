@@ -4,10 +4,14 @@ The main entry point is :func:`read_api_view`, which reads one PDM view through 
 API's flex endpoint and returns it as a :class:`pandas.DataFrame`.
 
 Authentication uses an Azure AD access token for the signed-in user (public
-client flow via ``msal-bearer``) plus an APIM subscription key. By default the
+client flow via ``eq-api-connector``, which builds on ``msal-bearer``) plus an
+APIM subscription key. By default the
 subscription key is read from Azure Key Vault with the signed-in user's own
 access; it can be overridden with :func:`set_subscription_key` or the
 ``PDM_APIM_SUBSCRIPTION_KEY`` environment variable.
+
+The direct database connection in :mod:`pdm_datareader.tools` authenticates
+separately and does not use ``eq-api-connector``.
 """
 
 import base64
@@ -17,17 +21,16 @@ import math
 import numbers
 import os
 import re
-import time
 from dataclasses import dataclass
 from decimal import Decimal
-from email.utils import parsedate_to_datetime
 from importlib.metadata import PackageNotFoundError, version
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple, Union
 
 import numpy as np
 import pandas as pd
 import requests
-from msal_bearer import BearerAuth
+from eq_api_connector import APIConnector
+from urllib3.exceptions import ReadTimeoutError
 
 TENANT_ID = "3aa4a235-b6e2-48d5-9195-7fcf05b459b0"
 PROD_CLIENT_ID = "9ed0d36d-1034-475a-bdce-fa7b774473fb"
@@ -37,8 +40,6 @@ ENV_VAR_BASE_URL = "PDM_API_BASE_URL"
 ENV_VAR_CLIENT_ID = "PDM_API_CLIENT_ID"
 ENV_VAR_SUBSCRIPTION_KEY = "PDM_APIM_SUBSCRIPTION_KEY"
 ENV_VAR_KEY_VAULT_URL = "PDM_KEY_VAULT_URL"
-
-SUBSCRIPTION_KEY_HEADER = "Ocp-Apim-Subscription-Key"
 
 # TODO: set to the real vault once it exists. Until then, set
 # PDM_KEY_VAULT_URL or supply the subscription key directly.
@@ -54,9 +55,6 @@ _SECRET_NAME_PATTERN = re.compile(r"^[0-9A-Za-z-]{1,127}$")
 
 DEFAULT_TIMEOUT_SECONDS = 300.0
 _CONNECT_TIMEOUT_SECONDS = 10.0
-_MAX_RETRIES = 3
-_MAX_RETRY_DELAY_SECONDS = 60.0
-_RETRY_STATUS_CODES = frozenset({429, 502, 503})
 
 # Characters with a meaning in the flex filter syntax. The API has no escape
 # mechanism (quoted values are still parsed as functions), so values containing
@@ -119,6 +117,9 @@ _subscription_key = ""
 # Kept in memory only, never written to disk.
 _vault_keys: Dict[Tuple[str, str], str] = {}
 _session: Optional[requests.Session] = None
+# Connector sessions are keyed by (client ID, scope), keeping API and Key Vault
+# credentials and connection pools separate.
+_connectors: Dict[Tuple[str, str], APIConnector] = {}
 
 
 class PdmApiError(Exception):
@@ -277,8 +278,8 @@ def get_api_token(username: str = "") -> str:
     """Get an access token for the PDM API.
 
     Returns the token set with :func:`set_api_token` if any. Otherwise gets a
-    token for the active environment through ``msal-bearer``, silently from
-    its cache when possible and interactively (browser login) when needed.
+    token for the active environment through ``eq-api-connector``, silently
+    from its cache when possible and interactively (browser login) when needed.
 
     The account is chosen in this order: ``username`` if given, then the
     account used for the previous API token in this session, then the
@@ -299,8 +300,38 @@ def get_api_token(username: str = "") -> str:
     return _acquire_token(get_environment().scope, username)
 
 
+def _get_connector(client_id: str, scope: str) -> APIConnector:
+    """Get the cached ``APIConnector`` for a client ID and scope, creating it if needed.
+
+    Args:
+        client_id (str): Azure AD public client (app registration) ID.
+        scope (str): Scope to request tokens for.
+
+    Returns:
+        APIConnector: The cached or newly created connector.
+    """
+    key = (client_id, scope)
+    connector = _connectors.get(key)
+    if connector is None:
+        connector = APIConnector(
+            tenant_id=TENANT_ID,
+            client_id=client_id,
+            scope=[scope],
+            user_name=_api_user_name or None,
+        )
+        _connectors[key] = connector
+    return connector
+
+
+def _reset_connectors() -> None:
+    """Drop the cached connectors so the next token request builds new ones."""
+    for connector in _connectors.values():
+        connector.session.close()
+    _connectors.clear()
+
+
 def _acquire_token(scope: str, username: str = "") -> str:
-    """Get a user token for ``scope`` through ``msal-bearer``.
+    """Get a user token for ``scope`` through ``eq-api-connector``.
 
     Shared by the API and Key Vault tokens so both use the same account
     selection (see :func:`get_api_token`).
@@ -317,16 +348,19 @@ def _acquire_token(scope: str, username: str = "") -> str:
     if username:
         _api_user_name = _normalize_username(username)
 
-    auth = BearerAuth.get_auth(
-        tenantID=TENANT_ID,
-        clientID=get_environment().client_id,
-        scopes=[scope],
-        username=_api_user_name,
-    )
+    connector = _get_connector(get_environment().client_id, scope)
+    # APIConnector falls back to the OS login name when no user is given. That
+    # name often differs from the Equinor account, so clear it and let the
+    # token cache pick the account instead (see get_api_token).
+    authenticator = connector.authenticator
+    if authenticator is None:
+        raise PdmAuthError("Could not initialize the API token authenticator.")
+    authenticator.user_name = _api_user_name or None
+    token = connector.get_token()
     # Remember the account actually signed in with, so the next call finds it
     # in the token cache instead of opening a new browser login.
-    _api_user_name = _username_from_token(auth.token) or _api_user_name
-    return auth.token
+    _api_user_name = _username_from_token(token) or _api_user_name
+    return token
 
 
 def set_subscription_key(key: str) -> None:
@@ -848,10 +882,10 @@ def _user_agent() -> str:
 
 
 def _get_session() -> requests.Session:
-    """Get the cached HTTP session, creating it if needed.
+    """Get the cached, key-free HTTP session used for Key Vault requests.
 
-    The session holds no credentials; the token and subscription key are
-    added per request.
+    The Key Vault bearer token is added per request. PDM API calls use the
+    retry-enabled session owned by ``APIConnector``.
 
     Returns:
         requests.Session: The shared session.
@@ -873,33 +907,6 @@ def _reset_session() -> None:
     if _session is not None:
         _session.close()
         _session = None
-
-
-def _retry_delay(response: Optional[requests.Response], attempt: int) -> float:
-    """Compute how long to wait before retrying.
-
-    Honours ``Retry-After`` (seconds or HTTP date) when present, otherwise
-    uses exponential backoff. Capped at ``_MAX_RETRY_DELAY_SECONDS``.
-
-    Args:
-        response: The response that triggered the retry, if any.
-        attempt (int): Zero-based retry attempt number.
-
-    Returns:
-        float: Delay in seconds.
-    """
-    delay = float(2**attempt)
-    header = response.headers.get("Retry-After") if response is not None else None
-    if header:
-        try:
-            delay = float(header)
-        except ValueError:
-            try:
-                retry_at = parsedate_to_datetime(header)
-                delay = (retry_at - dt.datetime.now(retry_at.tzinfo)).total_seconds()
-            except (TypeError, ValueError):
-                pass
-    return min(max(delay, 0.0), _MAX_RETRY_DELAY_SECONDS)
 
 
 def _error_details(response: requests.Response) -> Tuple[str, Optional[str]]:
@@ -986,11 +993,7 @@ def _request(
     timeout: Optional[float] = None,
     verbose: bool = False,
 ) -> requests.Response:
-    """Send an authenticated GET request to the API, with retries.
-
-    Retries connection errors and 429/502/503 responses up to
-    ``_MAX_RETRIES`` times. Timeouts are not retried, since repeating a slow
-    request rarely helps.
+    """Send an authenticated GET request through the connector's retry session.
 
     Args:
         path (str): Path relative to the base URL, e.g. ``"api/Ping"``.
@@ -1008,22 +1011,23 @@ def _request(
     env = get_environment()
     url = f"{env.base_url}/{path}"
     key, key_from_vault = _get_subscription_key()
+    connector = _get_connector(env.client_id, env.scope)
+    connector.subscription_key = key
+    connector.session.headers.update(
+        {"User-Agent": _user_agent(), "Accept": "application/json"}
+    )
     key_refreshed = False
     read_timeout = DEFAULT_TIMEOUT_SECONDS if timeout is None else timeout
 
-    attempt = 0
     while True:
-        headers = {
-            "Authorization": f"Bearer {get_api_token()}",
-            SUBSCRIPTION_KEY_HEADER: key,
-        }
         if verbose:
             print(f"GET {path} ({env.name})")
+        token = get_api_token()
         try:
-            response = _get_session().get(
+            response = connector.session.get(
                 url,
                 params=params,
-                headers=headers,
+                headers={"Authorization": f"Bearer {token}"},
                 timeout=(_CONNECT_TIMEOUT_SECONDS, read_timeout),
             )
         except requests.ReadTimeout:
@@ -1031,26 +1035,26 @@ def _request(
                 f"No response from the PDM API within {read_timeout:g} s. Narrow "
                 "the filters, request fewer columns, or increase timeout."
             ) from None
+        except requests.ConnectTimeout:
+            raise PdmTimeoutError(
+                f"Could not connect to the PDM API within "
+                f"{_CONNECT_TIMEOUT_SECONDS:g} s."
+            ) from None
         except requests.ConnectionError as err:
-            if attempt < _MAX_RETRIES:
-                delay = _retry_delay(None, attempt)
-                if verbose:
-                    print(f"Connection failed, retrying in {delay:g} s")
-                time.sleep(delay)
-                attempt += 1
-                continue
+            cause = err.args[0] if err.args else None
+            if isinstance(getattr(cause, "reason", None), ReadTimeoutError):
+                raise PdmTimeoutError(
+                    f"No response from the PDM API within {read_timeout:g} s. "
+                    "Narrow the filters, request fewer columns, or increase timeout."
+                ) from None
             raise PdmApiError(
                 f"Could not connect to the PDM API at {env.base_url}: "
                 f"{type(err).__name__}: {str(err)[:300]}"
             ) from None
-
-        if response.status_code in _RETRY_STATUS_CODES and attempt < _MAX_RETRIES:
-            delay = _retry_delay(response, attempt)
-            if verbose:
-                print(f"Got {response.status_code}, retrying in {delay:g} s")
-            time.sleep(delay)
-            attempt += 1
-            continue
+        except requests.RequestException as err:
+            raise PdmApiError(
+                f"PDM API request failed: {type(err).__name__}: {str(err)[:300]}"
+            ) from None
 
         # A key from Key Vault may have been rotated since it was cached:
         # read it again once and retry before reporting it as rejected.
@@ -1058,6 +1062,7 @@ def _request(
             if verbose:
                 print("Subscription key rejected, reading it again from Key Vault")
             key = _get_key_from_vault(refresh=True)
+            connector.subscription_key = key
             key_refreshed = True
             continue
 

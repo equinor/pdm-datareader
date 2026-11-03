@@ -2,6 +2,11 @@ import datetime as dt
 
 from pdm_datareader import tools
 
+sql = "SELECT * FROM PDMVW.FACILITY_MASTER"
+df = tools.query(sql)
+print(df)
+
+
 sql = "SELECT TOP(1) * FROM PDMVW.WELL_PROD_DAY"
 df = tools.query(sql)
 print(df)

@@ -15,7 +15,8 @@ standalone scanners with `uv tool run`:
 uv tool run --from bandit bandit -r src/pdm_datareader/ -ll
 
 # Audit this project's locked dependencies
-uv tool run --from pip-audit pip-audit
+uv export --locked --no-emit-project --format requirements-txt --output-file audit-requirements.txt
+uv tool run --from pip-audit pip-audit -r audit-requirements.txt
 
 # Pattern-based SAST
 uv tool run --from semgrep semgrep --config auto src/pdm_datareader/

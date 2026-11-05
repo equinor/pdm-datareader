@@ -16,19 +16,14 @@ jobs:
       - name: "Check out code"
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
       
-      - name: "Set up Python"
-        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405
+      - name: "Set up uv and Python"
+        uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
         with:          
-          python-version: 3.12      
-      
-      - name: "Install dependencies"            
-        run: |
-          python3 -m pip install --upgrade pip              
-          python3 -m pip install poetry
+          python-version: "3.12"
+          enable-cache: true
 
       - name: "Build distributions"            
-        run: |              
-          poetry build
+        run: uv build
           
       - name: "Publish package distributions to PyPI"
         uses: pypa/gh-action-pypi-publish@release/v1

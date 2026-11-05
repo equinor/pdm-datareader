@@ -1,100 +1,103 @@
 ---
 name: packaging-pdm-datareader
-description: Package and publish the pdm-datareader library to PyPI using Poetry and the poetry-core build backend. Covers pyproject.toml metadata, version bumps, building sdist + wheel, validating with twine, verifying wheel contents, and publishing. Use when releasing a new version, building distributables, or troubleshooting packaging issues.
+description: Package and publish the pdm-datareader library to PyPI using uv and the uv_build backend. Covers PEP 621 metadata, uv.lock maintenance, building sdist + wheel, validating with Twine, verifying wheel contents, and GitHub trusted publishing. Use when releasing a new version, building distributables, or troubleshooting packaging issues.
 ---
 
 # Packaging pdm-datareader
 
-This project uses **Poetry** with the `poetry-core` build backend (see
-`pyproject.toml`), not setuptools/hatchling/uv. Commands below assume Poetry is
-installed and you are at the repo root.
+This project uses **uv** with the `uv_build` backend. Run the commands from the
+repository root. End users can continue to install released packages with
+`pip install pdm-datareader`.
 
 ## pyproject.toml Essentials
 
-Metadata lives under `[tool.poetry]`:
+Metadata uses PEP 621 in `[project]`; development dependencies use dependency
+groups, and `uv.lock` records the resolved environment:
 
 ```toml
-[tool.poetry]
+[project]
 name = "pdm-datareader"
 version = "2.5.5"
 description = "A small python package to execute queries to PDM ..."
-authors = ["PDM TEAM <AWL@equinor.com>"]
+requires-python = ">=3.11,<4"
+authors = [{ name = "PDM TEAM", email = "AWL@equinor.com" }]
 license = "MIT"
 readme = "README.md"
-packages = [{ include = "pdm_datareader" }]
-repository = "https://github.com/equinor/pdm-datareader"
+dependencies = [
+    "msal-bearer>=1.6.1,<2.0.0",
+    "PyJWT>=2.15.1,<3.0.0",
+    "pyodbc>=5.1.0,<6",
+    "pandas>=2.2.2,<4.0.0",
+    "sqlalchemy>=2.0.36,<3",
+    "urllib3>=2.8.0,<3",
+]
 
-[tool.poetry.dependencies]
-python = "^3.11"
-msal-bearer = ">=1.3.0,<2.0.0"
-pyodbc = "^5.1.0"
-pandas = ">=2.2.2,<4.0.0"
-sqlalchemy = "^2.0.36"
-urllib3 = "^2.3.0"
+[dependency-groups]
+dev = ["pytest>=9.0.3,<10", "black>=26.10.1,<27"]
+
+[tool.uv]
+default-groups = "all"
 
 [build-system]
-requires = ["poetry-core"]
-build-backend = "poetry.core.masonry.api"
+requires = ["uv_build>=0.13.7,<0.14.0"]
+build-backend = "uv_build"
 ```
 
-- `packages = [{ include = "pdm_datareader" }]` tells poetry-core which package
-  directory to ship — keep it in sync with the actual package folder.
-- Runtime deps go under `[tool.poetry.dependencies]`; dev-only tools
-  (`pytest`, `black`) go under `[tool.poetry.group.dev.dependencies]` and are
-  **not** shipped to users.
+- The package uses the `src/pdm_datareader/` layout.
+- Runtime dependencies go under `[project].dependencies`; development tools
+  (`pytest`, `black`) go under `[dependency-groups].dev` and are not shipped.
 
 ## Version Bump (do this every release)
 
-Bump `version` under `[tool.poetry]` following SemVer
+Bump `version` under `[project]` following SemVer
 (`MAJOR.MINOR.MICRO` — see the versioning section in
 `.github/copilot-instructions.md`). Either edit the field directly or use:
 
 ```bash
-poetry version patch   # bug fix:     2.5.5 -> 2.5.6
-poetry version minor   # new feature: 2.5.5 -> 2.6.0
-poetry version major   # breaking:    2.5.5 -> 3.0.0
+# Update [project].version, then refresh the lockfile.
+uv lock
 ```
 
 ## Building
 
 ```bash
-poetry build                 # creates sdist + wheel in dist/
+uv build                     # creates sdist + wheel in dist/
 ```
 
 ## Validate Metadata
 
 ```bash
-poetry run pip install --quiet twine   # if twine not already available
-poetry run twine check dist/*          # validate long_description/metadata
+uv tool run --from twine twine check dist/*
 ```
 
 ## Verify the Built Artifact (a green build is not a correct wheel)
 
-`poetry build` succeeding only means the backend ran — not that the wheel
+`uv build` succeeding only means the backend ran — not that the wheel
 contains your code. Always inspect wheel contents before publishing:
 
 ```bash
 python -m zipfile -l dist/*.whl
 ```
 
-Confirm the whole package ships — `pdm_datareader/__init__.py` **and**
-`pdm_datareader/tools.py` — not just a top-level file. `twine check` validates
-metadata, not contents, so it won't catch a missing module.
+Confirm the wheel contains `pdm_datareader/__init__.py` and
+`pdm_datareader/tools.py` — not just a top-level file. The source files live
+under `src/pdm_datareader/`; `twine check` validates metadata, not contents, so
+it won't catch a missing module.
 
 Then prove it from a clean install, outside the repo root (so `import` doesn't
 pick up the source tree):
 
 ```bash
-python -m venv /tmp/verify
-/tmp/verify/bin/python -m pip install dist/*.whl
+uv venv /tmp/verify
+uv pip install --python /tmp/verify/bin/python dist/*.whl
 cd /tmp && /tmp/verify/bin/python -c "from pdm_datareader import tools; tools.query"
 ```
 
 On Windows PowerShell:
 
 ```powershell
-python -m venv $env:TEMP\verify
-& "$env:TEMP\verify\Scripts\python.exe" -m pip install (Get-ChildItem dist\*.whl)
+uv venv $env:TEMP\verify
+uv pip install --python "$env:TEMP\verify\Scripts\python.exe" (Get-ChildItem dist\*.whl)
 Push-Location $env:TEMP
 & "$env:TEMP\verify\Scripts\python.exe" -c "from pdm_datareader import tools; tools.query"
 Pop-Location
@@ -106,53 +109,37 @@ nothing.
 
 ## Publishing to PyPI
 
-Test on TestPyPI first, then publish to production:
-
-```bash
-# TestPyPI (one-time config)
-poetry config repositories.testpypi https://test.pypi.org/legacy/
-poetry publish -r testpypi --build
-
-# Production PyPI (uses a configured token)
-poetry publish --build
-```
-
-Configure the token once with:
-
-```bash
-poetry config pypi-token.pypi <your-token>
-```
-
-Never hardcode or commit tokens. Prefer trusted publishing from CI over a
-locally stored token where available.
+The GitHub Actions workflows publish with PyPI trusted publishing. The TestPyPI
+workflow builds and publishes test distributions; a GitHub release triggers the
+production workflow. Do not store PyPI tokens in the repository.
 
 ## Dependency Best Practices
 
 ```toml
-# DO: caret / bounded ranges (poetry style)
-msal-bearer = ">=1.3.0,<2.0.0"
-pyodbc = "^5.1.0"
+# DO: bounded PEP 440 ranges
+msal-bearer = ">=1.6.1,<2.0.0"
+pyodbc = ">=5.1.0,<6"
 
 # DON'T: exact pins that lock users to one release
 pyodbc = "5.1.0"
 ```
 
-Keep `python = "^3.11"` aligned with the supported versions in the project docs
-(3.11–3.13).
+After changing dependencies, run `uv lock` and commit the updated `uv.lock`.
+Keep `requires-python` aligned with the supported versions (3.11–3.14).
 
 ## Checklist
 
 ```
 Before Release:
-- [ ] Version bumped under [tool.poetry] (SemVer)
+- [ ] Version bumped under [project] (SemVer)
 - [ ] README.md updated for any new feature
-- [ ] pytest passes and black formatting applied
-- [ ] poetry build succeeds
-- [ ] poetry run twine check dist/* passes
-- [ ] python -m zipfile -l dist/*.whl shows pdm_datareader/__init__.py + tools.py
+- [ ] `uv run pytest` passes and `uv run black .` leaves files unchanged
+- [ ] `uv build` succeeds
+- [ ] `uv tool run --from twine twine check dist/*` passes
+- [ ] `unzip -l dist/*.whl` shows pdm_datareader/__init__.py + tools.py
 - [ ] Installed the wheel into a clean venv and imported tools.query from
       a directory outside the repo
-- [ ] Tested on TestPyPI first
+- [ ] TestPyPI workflow passes before production release
 
 After Release:
 - [ ] pip install pdm-datareader works

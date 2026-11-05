@@ -40,9 +40,9 @@ ENV_VAR_KEY_VAULT_URL = "PDM_KEY_VAULT_URL"
 
 SUBSCRIPTION_KEY_HEADER = "Ocp-Apim-Subscription-Key"
 
-# TODO: set to the real vault once it exists. Until then, set
-# PDM_KEY_VAULT_URL or supply the subscription key directly.
-KEY_VAULT_URL = "https://<vault-name>.vault.azure.net"
+# Key Vault holding the APIM subscription keys (one secret per environment,
+# see ENVIRONMENTS). Can be overridden with PDM_KEY_VAULT_URL.
+KEY_VAULT_URL = "https://kv-pdm-datareader-t-nwe.vault.azure.net"
 KEY_VAULT_SCOPE = "https://vault.azure.net/.default"
 KEY_VAULT_API_VERSION = "7.4"
 _KEY_VAULT_TIMEOUT_SECONDS = 30.0
@@ -100,14 +100,14 @@ ENVIRONMENTS: Dict[str, ApiEnvironment] = {
         base_url="https://api.gateway.equinor.com/pdm-internal-api/v3",
         scope="https://proxy-pdm-api-prod-external.radix.equinor.com/.default",
         client_id=PROD_CLIENT_ID,
-        key_vault_secret="pdm-apim-subscription-key",
+        key_vault_secret="prod-key",
     ),
     "test": ApiEnvironment(
         name="test",
         base_url="https://api-test.gateway.equinor.com/pdm-internal-api/v3",
         scope="https://proxy-pdm-api-test-external.radix.equinor.com/.default",
         client_id=PROD_CLIENT_ID,
-        key_vault_secret="pdm-apim-subscription-key-test",
+        key_vault_secret="test-key",
     ),
 }
 

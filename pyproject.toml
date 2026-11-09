@@ -1,6 +1,6 @@
 [project]
 name = "pdm-datareader"
-version = "2.6.0"
+version = "2.6.0b1"
 description = "A small python package to execute queries to PDM without having to re-authenticate every time"
 authors = [{ name = "PDM TEAM", email = "AWL@equinor.com" }]
 requires-python = ">=3.11,<4"
@@ -31,6 +31,7 @@ Repository = "https://github.com/equinor/pdm-datareader"
 dev = [
     "pytest>=9.0.3,<10",
     "black>=26.10.1,<27",
+    "responses>=0.25.0,<1.0.0",
 ]
 
 [tool.uv]

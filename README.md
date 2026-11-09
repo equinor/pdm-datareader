@@ -13,7 +13,7 @@
 `pdm-datareader` is a python package for reading [Production Data Mart](https://wiki.equinor.com/wiki/index.php/Production_Data_Mart) (PDM) data into pandas DataFrames. It can read data in two ways:
 
 - **Through the PDM API** (recommended for new users) — read one PDM view at a time with filters, column selection and sorting. No ODBC driver or Equinor network connection needed. See [API usage](#api-usage).
-- **With SQL directly against the PDM database** — full SQL, but requires the ODBC driver and the Equinor network. Will be deprecated in a future release. See [SQL usage](#sql-usage).
+- **With SQL directly against the PDM database** — full SQL, but requires the ODBC driver and the Equinor network. See [SQL usage](#sql-usage).
 
 Both handle authentication for end users with user impersonation (sign-in with your Equinor account), and both return only the data your PDM field access allows.
 
@@ -36,6 +36,8 @@ uv sync
 
 ## API usage
 Available from version 2.6.0. The API reads one PDM view at a time and returns it as a pandas DataFrame.
+
+> **Note:** Looking for how to query PDM with SQL directly? See [SQL usage](#sql-usage).
 
 ### 1. Get a subscription key
 All requests to the PDM API go through a gateway that requires a **subscription key** in addition to your Equinor sign-in. Create your own key in the [Equinor API portal](https://api.equinor.com/product). Make sure it is an "Enterprise" type subscription key.
@@ -147,7 +149,7 @@ Often it's simpler to split a large request by date instead, e.g. one `read_api_
 | `ORDER BY D DESC, A` | `order_by="D DESC, A"` |
 | `SELECT TOP(10)` | `top=10` |
 
-Joins, `GROUP BY`/aggregates, `OR` between different columns and calculated columns are not available in the API. Read each view with `read_api_view` and combine or aggregate the DataFrames with pandas, or keep using [SQL](#sql-usage) for those queries for now.
+Joins, `GROUP BY`/aggregates, `OR` between different columns and calculated columns are not available in the API. Read each view with `read_api_view` and combine or aggregate the DataFrames with pandas, or use [SQL](#sql-usage) for those queries.
 
 ### Troubleshooting
 
@@ -160,8 +162,6 @@ Joins, `GROUP BY`/aggregates, `OR` between different columns and calculated colu
 | Empty result | You may not have access to the field. `pdm.user_access()` lists the fields and facilities you have access to. |
 
 ## SQL usage
-> **Note:** Querying the PDM database directly with SQL will be deprecated in a future release. New code should use the [API](#api-usage) where possible.
-
 Requires the ODBC driver (see [Install](#install)) and a connection to the Equinor network.
 
 See [examples/demo.py](examples/demo.py) or try the code below that queries PDM and retrieves data:  

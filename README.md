@@ -22,6 +22,13 @@ This driver is bundled with the [Microsoft SQL Client](https://accessit.equinor.
 4. Finally install the latest version of the python package using:  
     ```pip install pdm-datareader```
 
+## Development
+Install [uv](https://docs.astral.sh/uv/getting-started/installation/) and use Python 3.11–3.14. From the repository root:
+
+```bash
+uv sync 
+```
+
 ## Usage
 See [examples/demo.py](examples/demo.py) or try the code below that queries PDM and retrieves data:  
 

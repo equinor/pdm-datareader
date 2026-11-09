@@ -9,14 +9,14 @@ description: Write and run pytest tests for the pdm-datareader library, focused 
 
 ```bash
 # Run the whole suite
-pytest
+uv run pytest
 
 # Run one file / one test with verbose output
-pytest tests/test_engine_cache.py -v
-pytest tests/test_engine_cache.py::test_engine_is_cached_for_same_token -v
+uv run pytest tests/test_engine_cache.py -v
+uv run pytest tests/test_engine_cache.py::test_engine_is_cached_for_same_token -v
 
 # Stop on first failure, show locals
-pytest -x -l
+uv run pytest -x -l
 ```
 
 Config lives in `pytest.ini`. Tests live in `tests/` and import the package as
@@ -155,4 +155,4 @@ Use `capsys` to assert a sentinel token never appears in rendered output
 - [ ] Module globals reset via an autouse fixture.
 - [ ] New public function in `tools.py` has at least one test.
 - [ ] No secret/token value is printed or asserted in plaintext output.
-- [ ] `pytest` passes locally and `black .` leaves the tests unchanged.
+- [ ] `uv run pytest` passes locally and `uv run black .` leaves the tests unchanged.

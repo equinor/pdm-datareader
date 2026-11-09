@@ -20,15 +20,19 @@ Both handle authentication for end users with user impersonation (sign-in with y
 Pull requests, feature requests and issues are welcomed using the [GitHub Project Repository](https://github.com/equinor/pdm-datareader) or as a ServiceNow ticket directed to Production Data Mart.
 
 ## Install
-1. Install the latest version of the python package using:  
-    ```pip install pdm-datareader```
-2. Linux users must apply for [Linux compliant device exclusion](https://accessit.equinor.com/Search/Search?term=linux+exclusion) to get multifactor authentication to work.
-
-Only needed for [SQL usage](#sql-usage):
-
-3. Ensure that [ODBC Driver for SQL Server](https://learn.microsoft.com/en-us/sql/connect/odbc/download-odbc-driver-for-sql-server) is installed. Currently supports both v18 and v17.  
+1. Ensure that [ODBC Driver for SQL Server](https://learn.microsoft.com/en-us/sql/connect/odbc/download-odbc-driver-for-sql-server) is installed (only needed for [SQL usage](#sql-usage)). Currently supports both v18 and v17.  
 This driver is bundled with the [Microsoft SQL Client](https://accessit.equinor.com/Search/Search?term=MICROSOFT+SQL+CLIENT) package in AccessIT, and should be pre installed on linux environments. Instructions for installing on MacOS can be found [here.](https://learn.microsoft.com/en-us/sql/connect/odbc/download-odbc-driver-for-sql-server).
-4. MacOS users must install unixodbc. See [https://pypi.org/project/pyodbc/](https://pypi.org/project/pyodbc/) for current instructions.
+2. MacOS users must install unixodbc (only needed for [SQL usage](#sql-usage)). See [https://pypi.org/project/pyodbc/](https://pypi.org/project/pyodbc/) for current instructions.
+3. Linux users must apply for [Linux compliant device exclusion](https://accessit.equinor.com/Search/Search?term=linux+exclusion) to get multifactor authentication to work.
+4. Finally install the latest version of the python package using:  
+    ```pip install pdm-datareader```
+
+## Development
+Install [uv](https://docs.astral.sh/uv/getting-started/installation/) and use Python 3.11–3.14. From the repository root:
+
+```bash
+uv sync 
+```
 
 ## API usage
 Available from version 2.6.0. The API reads one PDM view at a time and returns it as a pandas DataFrame.

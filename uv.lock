@@ -532,7 +532,7 @@ wheels = [
 
 [[package]]
 name = "pdm-datareader"
-version = "2.6.0b1"
+version = "2.6.0"
 source = { editable = "." }
 default-groups = "all"
 dependencies = [

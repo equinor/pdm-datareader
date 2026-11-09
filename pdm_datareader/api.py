@@ -4,10 +4,9 @@ The main entry point is :func:`read_api_view`, which reads one PDM view through 
 API's flex endpoint and returns it as a :class:`pandas.DataFrame`.
 
 Authentication uses an Azure AD access token for the signed-in user (public
-client flow via ``msal-bearer``) plus an APIM subscription key. By default the
-subscription key is read from Azure Key Vault with the signed-in user's own
-access; it can be overridden with :func:`set_subscription_key` or the
-``PDM_APIM_SUBSCRIPTION_KEY`` environment variable.
+client flow via ``msal-bearer``) plus an APIM subscription key, which the user
+supplies via :func:`set_subscription_key` or the ``PDM_APIM_SUBSCRIPTION_KEY``
+environment variable.
 """
 
 import base64
@@ -36,21 +35,8 @@ ENV_VAR_ENVIRONMENT = "PDM_API_ENV"
 ENV_VAR_BASE_URL = "PDM_API_BASE_URL"
 ENV_VAR_CLIENT_ID = "PDM_API_CLIENT_ID"
 ENV_VAR_SUBSCRIPTION_KEY = "PDM_APIM_SUBSCRIPTION_KEY"
-ENV_VAR_KEY_VAULT_URL = "PDM_KEY_VAULT_URL"
 
 SUBSCRIPTION_KEY_HEADER = "Ocp-Apim-Subscription-Key"
-
-# Key Vault holding the APIM subscription keys (one secret per environment,
-# see ENVIRONMENTS). Can be overridden with PDM_KEY_VAULT_URL.
-KEY_VAULT_URL = "https://kv-pdm-datareader-t-nwe.vault.azure.net"
-KEY_VAULT_SCOPE = "https://vault.azure.net/.default"
-KEY_VAULT_API_VERSION = "7.4"
-_KEY_VAULT_TIMEOUT_SECONDS = 30.0
-_KEY_VAULT_URL_PATTERN = re.compile(
-    r"^https://[a-z0-9](?:[a-z0-9-]{1,22}[a-z0-9])?\.vault\.azure\.net/?$",
-    re.IGNORECASE,
-)
-_SECRET_NAME_PATTERN = re.compile(r"^[0-9A-Za-z-]{1,127}$")
 
 DEFAULT_TIMEOUT_SECONDS = 300.0
 _CONNECT_TIMEOUT_SECONDS = 10.0
@@ -83,15 +69,12 @@ class ApiEnvironment:
         base_url (str): APIM base URL, without the trailing ``/api``.
         scope (str): Azure AD scope to request access tokens for.
         client_id (str): Azure AD public client (app registration) ID.
-        key_vault_secret (str): Name of the Key Vault secret holding the APIM
-            subscription key for this environment's gateway.
     """
 
     name: str
     base_url: str
     scope: str
     client_id: str
-    key_vault_secret: str
 
 
 ENVIRONMENTS: Dict[str, ApiEnvironment] = {
@@ -100,14 +83,12 @@ ENVIRONMENTS: Dict[str, ApiEnvironment] = {
         base_url="https://api.gateway.equinor.com/pdm-internal-api/v3",
         scope="https://proxy-pdm-api-prod-external.radix.equinor.com/.default",
         client_id=PROD_CLIENT_ID,
-        key_vault_secret="prod-key",
     ),
     "test": ApiEnvironment(
         name="test",
         base_url="https://api-test.gateway.equinor.com/pdm-internal-api/v3",
         scope="https://proxy-pdm-api-test-external.radix.equinor.com/.default",
         client_id=PROD_CLIENT_ID,
-        key_vault_secret="test-key",
     ),
 }
 
@@ -115,9 +96,6 @@ _environment_name = ""
 _api_token = ""
 _api_user_name = ""
 _subscription_key = ""
-# Subscription keys read from Key Vault, keyed by (vault URL, secret name).
-# Kept in memory only, never written to disk.
-_vault_keys: Dict[Tuple[str, str], str] = {}
 _session: Optional[requests.Session] = None
 
 
@@ -209,7 +187,6 @@ def get_environment() -> ApiEnvironment:
         base_url=base_url.rstrip("/"),
         scope=env.scope,
         client_id=client_id,
-        key_vault_secret=env.key_vault_secret,
     )
 
 
@@ -293,34 +270,19 @@ def get_api_token(username: str = "") -> str:
     Returns:
         str: Access token string.
     """
+    global _api_user_name
+
     if _api_token:
         return _api_token
-
-    return _acquire_token(get_environment().scope, username)
-
-
-def _acquire_token(scope: str, username: str = "") -> str:
-    """Get a user token for ``scope`` through ``msal-bearer``.
-
-    Shared by the API and Key Vault tokens so both use the same account
-    selection (see :func:`get_api_token`).
-
-    Args:
-        scope (str): Scope to request, e.g. the API or Key Vault scope.
-        username (str, optional): Account to use, overriding the remembered one.
-
-    Returns:
-        str: Access token string.
-    """
-    global _api_user_name
 
     if username:
         _api_user_name = _normalize_username(username)
 
+    env = get_environment()
     auth = BearerAuth.get_auth(
         tenantID=TENANT_ID,
-        clientID=get_environment().client_id,
-        scopes=[scope],
+        clientID=env.client_id,
+        scopes=[env.scope],
         username=_api_user_name,
     )
     # Remember the account actually signed in with, so the next call finds it
@@ -330,11 +292,10 @@ def _acquire_token(scope: str, username: str = "") -> str:
 
 
 def set_subscription_key(key: str) -> None:
-    """Set the APIM subscription key explicitly.
+    """Set the APIM subscription key to send with every request.
 
-    Overrides both the ``PDM_APIM_SUBSCRIPTION_KEY`` environment variable and
-    the key from Key Vault, e.g. for users or services with their own
-    subscription. Pass an empty string to go back to the default lookup.
+    Takes precedence over the ``PDM_APIM_SUBSCRIPTION_KEY`` environment
+    variable. Pass an empty string to fall back to the environment variable.
     Never commit the key to source control.
 
     Args:
@@ -344,123 +305,26 @@ def set_subscription_key(key: str) -> None:
     _subscription_key = key
 
 
-def _get_subscription_key() -> Tuple[str, bool]:
+def _get_subscription_key() -> str:
     """Resolve the APIM subscription key.
 
     Lookup order: :func:`set_subscription_key`, then the
-    ``PDM_APIM_SUBSCRIPTION_KEY`` environment variable, then Key Vault.
-
-    Returns:
-        Tuple[str, bool]: The key, and whether it came from Key Vault.
-
-    Raises:
-        SubscriptionKeyError: If the key can't be read from Key Vault.
-    """
-    key = _subscription_key or os.getenv(ENV_VAR_SUBSCRIPTION_KEY, "").strip()
-    if key:
-        return key, False
-    return _get_key_from_vault(), True
-
-
-def _key_vault_url() -> str:
-    """Get and validate the Key Vault URL.
-
-    Only ``https://<name>.vault.azure.net`` URLs are accepted, so a Key Vault
-    token is never sent to another host.
-
-    Returns:
-        str: The vault URL without a trailing slash.
-
-    Raises:
-        SubscriptionKeyError: If the URL is not configured or not valid.
-    """
-    url = os.getenv(ENV_VAR_KEY_VAULT_URL, "").strip() or KEY_VAULT_URL
-    if not _KEY_VAULT_URL_PATTERN.match(url):
-        raise SubscriptionKeyError(
-            f"No valid Key Vault configured for the subscription key ({url!r}). "
-            f"Set {ENV_VAR_KEY_VAULT_URL} to https://<vault-name>.vault.azure.net, "
-            f"or supply the key with {ENV_VAR_SUBSCRIPTION_KEY} or "
-            "set_subscription_key(...)."
-        )
-    return url.rstrip("/")
-
-
-def _get_key_from_vault(refresh: bool = False) -> str:
-    """Read the active environment's subscription key from Key Vault.
-
-    Uses a Key Vault token for the signed-in user, so access follows the
-    user's own Key Vault permissions. The key is cached in memory for the
-    session.
-
-    Args:
-        refresh (bool): Ignore the cached value and read the secret again,
-            e.g. after the key was rotated.
+    ``PDM_APIM_SUBSCRIPTION_KEY`` environment variable.
 
     Returns:
         str: The subscription key.
 
     Raises:
-        SubscriptionKeyError: If the secret can't be read.
+        SubscriptionKeyError: If no key is configured.
     """
-    env = get_environment()
-    vault_url = _key_vault_url()
-    secret = env.key_vault_secret
-    if not _SECRET_NAME_PATTERN.match(secret):
-        raise SubscriptionKeyError(f"Invalid Key Vault secret name {secret!r}.")
-
-    cache_key = (vault_url, secret)
-    if not refresh and cache_key in _vault_keys:
-        return _vault_keys[cache_key]
-
-    override_hint = (
-        f"To use a key directly instead, set {ENV_VAR_SUBSCRIPTION_KEY} or call "
-        "set_subscription_key(...)."
-    )
-    try:
-        response = _get_session().get(
-            f"{vault_url}/secrets/{secret}",
-            params={"api-version": KEY_VAULT_API_VERSION},
-            headers={"Authorization": "Bearer " + _acquire_token(KEY_VAULT_SCOPE)},
-            timeout=(_CONNECT_TIMEOUT_SECONDS, _KEY_VAULT_TIMEOUT_SECONDS),
-        )
-    except requests.RequestException as err:
+    key = _subscription_key or os.getenv(ENV_VAR_SUBSCRIPTION_KEY, "").strip()
+    if not key:
         raise SubscriptionKeyError(
-            f"Could not reach Key Vault {vault_url}: {type(err).__name__}. "
-            + override_hint
-        ) from None
-
-    if response.status_code in (401, 403):
-        raise SubscriptionKeyError(
-            f"No access to secret {secret!r} in Key Vault {vault_url} "
-            f"({response.status_code}). Access to the PDM API subscription key "
-            "must be granted to your account. " + override_hint,
-            response.status_code,
+            "No APIM subscription key configured. Get a key from the Equinor API "
+            f"portal and set the {ENV_VAR_SUBSCRIPTION_KEY} environment variable "
+            "or call pdm_datareader.set_subscription_key(...)."
         )
-    if response.status_code == 404:
-        raise SubscriptionKeyError(
-            f"Secret {secret!r} was not found in Key Vault {vault_url}. "
-            + override_hint,
-            response.status_code,
-        )
-    if not response.ok:
-        message, _ = _error_details(response)
-        raise SubscriptionKeyError(
-            f"Reading the subscription key from Key Vault failed: "
-            f"{response.status_code} {message}. " + override_hint,
-            response.status_code,
-        )
-
-    try:
-        key = response.json()["value"]
-    except (ValueError, KeyError, TypeError):
-        key = None
-    if not isinstance(key, str) or not key.strip():
-        raise SubscriptionKeyError(
-            f"Secret {secret!r} in Key Vault {vault_url} has no usable value."
-        )
-
-    _vault_keys[cache_key] = key.strip()
-    return _vault_keys[cache_key]
+    return key
 
 
 # ---------------------------------------------------------------------------
@@ -955,10 +819,9 @@ def _raise_for_response(response: requests.Response) -> None:
 
     if _is_key_rejection(response):
         raise SubscriptionKeyError(
-            f"The gateway rejected the subscription key: {detail}. If you set "
-            f"the key yourself ({ENV_VAR_SUBSCRIPTION_KEY} or "
-            "set_subscription_key), check it belongs to the selected "
-            "environment; otherwise the key in Key Vault may be outdated.",
+            f"The gateway rejected the subscription key: {detail}. Check "
+            f"{ENV_VAR_SUBSCRIPTION_KEY} or set_subscription_key(...), and that "
+            "the key belongs to the selected environment.",
             status,
             trace_id,
         )
@@ -1007,8 +870,7 @@ def _request(
     """
     env = get_environment()
     url = f"{env.base_url}/{path}"
-    key, key_from_vault = _get_subscription_key()
-    key_refreshed = False
+    key = _get_subscription_key()
     read_timeout = DEFAULT_TIMEOUT_SECONDS if timeout is None else timeout
 
     attempt = 0
@@ -1050,15 +912,6 @@ def _request(
                 print(f"Got {response.status_code}, retrying in {delay:g} s")
             time.sleep(delay)
             attempt += 1
-            continue
-
-        # A key from Key Vault may have been rotated since it was cached:
-        # read it again once and retry before reporting it as rejected.
-        if key_from_vault and not key_refreshed and _is_key_rejection(response):
-            if verbose:
-                print("Subscription key rejected, reading it again from Key Vault")
-            key = _get_key_from_vault(refresh=True)
-            key_refreshed = True
             continue
 
         if not response.ok:

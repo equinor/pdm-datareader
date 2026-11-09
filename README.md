@@ -33,15 +33,12 @@ This driver is bundled with the [Microsoft SQL Client](https://accessit.equinor.
 ## API usage
 Available from version 2.6.0. The API reads one PDM view at a time and returns it as a pandas DataFrame.
 
-### 1. Access
-All requests to the PDM API go through a gateway that requires a **subscription key** in addition to your Equinor sign-in. You don't need to handle the key yourself: `pdm-datareader` reads it from Azure Key Vault automatically, using your own sign-in, and keeps it in memory only.
+### 1. Get a subscription key
+All requests to the PDM API go through a gateway that requires a **subscription key** in addition to your Equinor sign-in. Create your own key in the [Equinor API portal](https://api.equinor.com/product). Make sure it is an "Enterprise" type subscription key.
 
-Your account needs:
-- **PDM data access** — the same field-based roles as for the database, applied for in AccessIT.
-- **Read access to the PDM API subscription key in Key Vault.** If you get a `SubscriptionKeyError` saying you have no access, contact the Production Data Mart team (e.g. a ServiceNow ticket directed to Production Data Mart).
+Your account also needs **PDM data access**: the same field-based roles as for the database, applied for in AccessIT.
 
-#### Using your own subscription key (optional)
-If you have your own subscription key, for example from the [Equinor API portal](https://api.equinor.com/product) ("Enterprise" type), it is used instead of the one in Key Vault. Treat it like a password: don't put it in notebooks, scripts or git repositories. Set it as an environment variable:
+Treat the key like a password: don't put it in notebooks, scripts or git repositories. Set it as an environment variable instead:
 
 ```powershell
 # Windows (PowerShell), for the current user permanently
@@ -62,7 +59,7 @@ import pdm_datareader as pdm
 pdm.ping()          # e.g. {'version': '3.0', 'databaseCheckPassed': True}
 ```
 
-The first call opens a browser window to sign in with your Equinor account; the same sign-in is used to read the subscription key from Key Vault. Later calls reuse the sign-in silently. If you have several Equinor accounts, choose one with `pdm.get_api_token(username="abcd")` (short name or full email address) before your first call.
+The first call opens a browser window to sign in with your Equinor account. Later calls reuse the sign-in silently. If you have several Equinor accounts, choose one with `pdm.get_api_token(username="abcd")` (short name or full email address) before your first call.
 
 ### 3. Read data
 ```python
@@ -152,7 +149,7 @@ Joins, `GROUP BY`/aggregates, `OR` between different columns and calculated colu
 
 | Error | Meaning |
 |---|---|
-| `SubscriptionKeyError` | The subscription key couldn't be read from Key Vault (e.g. no access) or was rejected by the gateway. The message says which. If you set `PDM_APIM_SUBSCRIPTION_KEY` yourself, check that the key is correct. |
+| `SubscriptionKeyError` | The subscription key is missing or was rejected by the gateway. Check that `PDM_APIM_SUBSCRIPTION_KEY` is set and that the key is valid. |
 | `PdmAuthError` | Sign-in failed or access was denied. |
 | `PdmTimeoutError` | The request took too long. Narrow the filters, request fewer `columns`, or split the request (e.g. by date). |
 | `PdmApiError` | Other errors from the API. The message includes a `TraceId` when available; include it when reporting issues. |

@@ -851,9 +851,11 @@ def _request(
 ) -> requests.Response:
     """Send an authenticated GET request to the API, with retries.
 
-    Retries connection errors and 429/502/503 responses up to
-    ``_MAX_RETRIES`` times. Timeouts are not retried, since repeating a slow
-    request rarely helps.
+    Retries connection errors (including connect timeouts) and 429/502/503
+    responses up to ``_MAX_RETRIES`` times. Read timeouts are not retried,
+    since repeating a slow request rarely helps. Redirects are not followed,
+    so the access token and subscription key are only ever sent to the
+    configured gateway.
 
     Args:
         path (str): Path relative to the base URL, e.g. ``"api/Ping"``.
@@ -866,7 +868,8 @@ def _request(
         requests.Response: The successful response.
 
     Raises:
-        PdmApiError: Or a subclass, if the request fails.
+        PdmTimeoutError: If connecting or reading times out.
+        PdmApiError: Or another subclass, if the request fails.
     """
     env = get_environment()
     url = f"{env.base_url}/{path}"
@@ -887,6 +890,9 @@ def _request(
                 params=params,
                 headers=headers,
                 timeout=(_CONNECT_TIMEOUT_SECONDS, read_timeout),
+                # requests keeps custom headers such as the subscription key on
+                # redirects, even to other hosts or plain HTTP.
+                allow_redirects=False,
             )
         except requests.ReadTimeout:
             raise PdmTimeoutError(
@@ -901,10 +907,27 @@ def _request(
                 time.sleep(delay)
                 attempt += 1
                 continue
+            # ConnectTimeout is a ConnectionError, not a ReadTimeout.
+            if isinstance(err, requests.ConnectTimeout):
+                raise PdmTimeoutError(
+                    f"Could not connect to the PDM API at {env.base_url} within "
+                    f"{_CONNECT_TIMEOUT_SECONDS:g} s ({_MAX_RETRIES + 1} attempts). "
+                    "Check your network connection."
+                ) from None
             raise PdmApiError(
                 f"Could not connect to the PDM API at {env.base_url}: "
                 f"{type(err).__name__}: {str(err)[:300]}"
             ) from None
+
+        if 300 <= response.status_code < 400:
+            raise PdmApiError(
+                f"The PDM API answered with an unexpected redirect "
+                f"({response.status_code}) to "
+                f"{response.headers.get('Location', 'an unknown location')!r}. "
+                "Redirects are not followed, to avoid sending credentials to "
+                f"another host. Check the base URL ({env.base_url}).",
+                response.status_code,
+            )
 
         if response.status_code in _RETRY_STATUS_CODES and attempt < _MAX_RETRIES:
             delay = _retry_delay(response, attempt)
@@ -966,6 +989,11 @@ def _convert_types(df: pd.DataFrame) -> pd.DataFrame:
     converted only when every non-null value is an ISO 8601 date-time.
     Numbers and booleans are already typed by the JSON decoder.
 
+    If a column can't be converted, it is left as strings instead of failing
+    the read, like ``pd.read_sql`` does. This happens on pandas 2.x for dates
+    outside its range (years 1677-2262), such as the common ``9999-12-31``
+    "no end date" value; pandas 3 handles those.
+
     Args:
         df: DataFrame built from the JSON records.
 
@@ -982,7 +1010,12 @@ def _convert_types(df: pd.DataFrame) -> pd.DataFrame:
         if values.empty:
             continue
         if all(isinstance(v, str) and _ISO_DATETIME_PATTERN.match(v) for v in values):
-            df[column] = pd.to_datetime(series, format="ISO8601")
+            try:
+                df[column] = pd.to_datetime(series, format="ISO8601")
+            except (ValueError, OverflowError):
+                # OutOfBoundsDatetime is a ValueError; also covers impossible
+                # dates that still match the pattern (e.g. 2024-02-30).
+                pass
     return df
 
 

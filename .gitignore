@@ -70,6 +70,7 @@ poetry.lock
 .pytest_cache/
 
 .vscode/
+.vs/
 .DS_Store
 
 # Local planning docs

@@ -64,12 +64,13 @@ tests/tmp/
 .python-version
 
 # Poetry
-*.lock
+poetry.lock
 
 # pytest
 .pytest_cache/
 
 .vscode/
+.vs/
 .DS_Store
 
 # Local planning docs

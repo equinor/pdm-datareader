@@ -7,21 +7,22 @@ description: Audits the pdm-datareader library for security vulnerabilities usin
 
 ## Quick Start
 
-This project uses **Poetry** (not uv). Run the scanners with `poetry run` /
-`pipx run`:
+This project uses **uv**. Run project dependency audits with `uv run` and
+standalone scanners with `uv tool run`:
 
 ```bash
 # High-severity static analysis of the package
-pipx run bandit -r pdm_datareader/ -ll
+uv tool run --from bandit bandit -r src/pdm_datareader/ -ll
 
-# Audit this project's dependencies (reads the Poetry lock via the env)
-poetry run pip-audit
+# Audit this project's locked dependencies
+uv export --locked --no-emit-project --format requirements-txt --output-file audit-requirements.txt
+uv tool run --from pip-audit pip-audit -r audit-requirements.txt
 
 # Pattern-based SAST
-pipx run semgrep --config auto pdm_datareader/
+uv tool run --from semgrep semgrep --config auto src/pdm_datareader/
 
 # Secrets detection (tokens, connection strings)
-pipx run detect-secrets scan > .secrets.baseline
+uv tool run --from detect-secrets detect-secrets scan > .secrets.baseline
 ```
 
 ## Tool Configuration
@@ -36,8 +37,8 @@ skips: [B101]  # assert_used - OK in tests
 **pip-audit:**
 
 ```bash
-poetry run pip-audit            # Audit the resolved environment
-poetry run pip-audit --fix      # Attempt to bump vulnerable pins
+uv tool run --from pip-audit pip-audit            # Audit installed dependencies
+uv tool run --from pip-audit pip-audit --fix      # Attempt to bump vulnerable pins
 ```
 
 ## Common Vulnerabilities
@@ -53,7 +54,7 @@ poetry run pip-audit --fix      # Attempt to bump vulnerable pins
 ## Secure Patterns
 
 This library's primary attack surface is the `query()` function in
-[pdm_datareader/tools.py](pdm_datareader/tools.py). Always bind dynamic values.
+[`src/pdm_datareader/tools.py`](../../../src/pdm_datareader/tools.py). Always bind dynamic values.
 
 ```python
 # SQL - Parameterized query (bind params, never f-strings)
@@ -115,13 +116,12 @@ make the test pass vacuously.
 
 ```yaml
 # .github/workflows/security.yml
-- uses: actions/setup-python@v5
-  with:
-    python-version: "3.11"
-- run: pipx install poetry
-- run: poetry install
-- run: pipx run bandit -r pdm_datareader/ -ll
-- run: poetry run pip-audit
+- uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+    with:
+        python-version: "3.11"
+- run: uv sync --locked
+- run: uv tool run --from bandit bandit -r src/pdm_datareader/ -ll
+- run: uv tool run --from pip-audit pip-audit
 ```
 
 ## Audit Checklist

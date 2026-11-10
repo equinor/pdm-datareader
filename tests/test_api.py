@@ -38,10 +38,10 @@ from pdm_datareader.api import (
 
 BASE = api.ENVIRONMENTS["prod"].base_url
 TEST_BASE = api.ENVIRONMENTS["test"].base_url
-VAULT = "https://kv-pdm-unittest.vault.azure.net"
-PROD_SECRET_URL = f"{VAULT}/secrets/{api.ENVIRONMENTS['prod'].key_vault_secret}"
-TEST_SECRET_URL = f"{VAULT}/secrets/{api.ENVIRONMENTS['test'].key_vault_secret}"
+OTHER_HOST = "http://other.example/collect"
 FAKE_UPN = "user@equinor.com"
+SENTINEL_TOKEN = "sentinel-token-that-must-not-appear"
+SENTINEL_KEY = "sentinel-key-that-must-not-appear"
 
 KEY_REJECTED = dict(
     status=401,
@@ -96,7 +96,6 @@ def isolated(monkeypatch):
         api.ENV_VAR_BASE_URL,
         api.ENV_VAR_CLIENT_ID,
         api.ENV_VAR_SUBSCRIPTION_KEY,
-        api.ENV_VAR_KEY_VAULT_URL,
     ):
         monkeypatch.delenv(name, raising=False)
 
@@ -105,7 +104,6 @@ def isolated(monkeypatch):
     monkeypatch.setattr(api, "_api_token", "")
     monkeypatch.setattr(api, "_api_user_name", "")
     monkeypatch.setattr(api, "_subscription_key", "")
-    monkeypatch.setattr(api, "_vault_keys", {})
     yield
     api._reset_session()
 
@@ -134,16 +132,9 @@ def sleeps(monkeypatch):
 
 @pytest.fixture
 def key():
-    """Use an explicit subscription key (no Key Vault)."""
+    """Use an explicit subscription key."""
     api.set_subscription_key("sub-key-123")
     return "sub-key-123"
-
-
-@pytest.fixture
-def vault(monkeypatch):
-    """Point the Key Vault lookup at a fake vault, with no key override."""
-    monkeypatch.setenv(api.ENV_VAR_KEY_VAULT_URL, VAULT)
-    return VAULT
 
 
 def query_params(call):
@@ -152,10 +143,6 @@ def query_params(call):
 
 def api_calls(http):
     return [c for c in http.calls if c.request.url.startswith(BASE)]
-
-
-def vault_calls(http):
-    return [c for c in http.calls if c.request.url.startswith(VAULT)]
 
 
 # ---------------------------------------------------------------------------
@@ -405,6 +392,78 @@ def test_empty_result_without_columns(http, key):
     assert pdm.read_api_view("View").empty
 
 
+def test_out_of_range_date_does_not_fail_the_read(http, key):
+    # 9999-12-31 ("no end date") is outside pandas 2.x's nanosecond range; it
+    # must not fail the whole read. pandas 3 converts it, pandas 2 keeps it.
+    http.get(
+        f"{BASE}/api/flex/View",
+        json=[
+            {"PROD_DAY": "2024-01-01T00:00:00", "END_DATE": "9999-12-31T00:00:00"},
+            {"PROD_DAY": "2024-01-02T00:00:00", "END_DATE": None},
+        ],
+    )
+
+    df = pdm.read_api_view("View")
+
+    assert pd.api.types.is_datetime64_any_dtype(df["PROD_DAY"])
+    end = df["END_DATE"].iloc[0]
+    if pd.api.types.is_datetime64_any_dtype(df["END_DATE"]):
+        assert end == pd.Timestamp("9999-12-31")
+    else:
+        assert end == "9999-12-31T00:00:00"
+    assert pd.isna(df["END_DATE"].iloc[1])
+
+
+def test_impossible_date_leaves_column_unconverted(http, key):
+    # Matches the ISO pattern but isn't a real date on any pandas version.
+    http.get(
+        f"{BASE}/api/flex/View",
+        json=[
+            {"PROD_DAY": "2024-01-01T00:00:00", "ODD": "2024-02-30T00:00:00"},
+            {"PROD_DAY": "2024-01-02T00:00:00", "ODD": "2024-03-01T00:00:00"},
+        ],
+    )
+
+    df = pdm.read_api_view("View")
+
+    assert pd.api.types.is_datetime64_any_dtype(df["PROD_DAY"])
+    assert not pd.api.types.is_datetime64_any_dtype(df["ODD"])
+    assert list(df["ODD"]) == ["2024-02-30T00:00:00", "2024-03-01T00:00:00"]
+
+
+@pytest.mark.parametrize(
+    "error",
+    [
+        pd.errors.OutOfBoundsDatetime("out of bounds"),
+        OverflowError("overflow"),
+        ValueError("bad value"),
+    ],
+    ids=["out-of-bounds", "overflow", "value-error"],
+)
+def test_conversion_error_keeps_original_strings(monkeypatch, error):
+    # Independent of the installed pandas version: whatever pandas raises for
+    # an unconvertible column, the read keeps the original values.
+    def failing_to_datetime(*args, **kwargs):
+        raise error
+
+    monkeypatch.setattr(api.pd, "to_datetime", failing_to_datetime)
+
+    df = api._to_dataframe([{"D": "2024-01-01T00:00:00"}, {"D": None}])
+
+    assert df["D"].iloc[0] == "2024-01-01T00:00:00"
+    assert pd.isna(df["D"].iloc[1])
+
+
+def test_unexpected_conversion_error_is_not_swallowed(monkeypatch):
+    def failing_to_datetime(*args, **kwargs):
+        raise TypeError("unexpected")
+
+    monkeypatch.setattr(api.pd, "to_datetime", failing_to_datetime)
+
+    with pytest.raises(TypeError):
+        api._to_dataframe([{"D": "2024-01-01T00:00:00"}])
+
+
 @pytest.mark.parametrize(
     "response",
     [
@@ -522,8 +581,37 @@ def test_username_from_malformed_token_is_empty(token):
 
 
 # ---------------------------------------------------------------------------
-# Subscription key lookup and refresh
+# Subscription key (user-supplied only)
 # ---------------------------------------------------------------------------
+
+
+def test_missing_key_fails_before_sign_in_or_network(http, auth):
+    with pytest.raises(SubscriptionKeyError) as err:
+        pdm.ping()
+
+    message = str(err.value)
+    assert api.ENV_VAR_SUBSCRIPTION_KEY in message
+    assert "set_subscription_key" in message
+    assert "API portal" in message
+    assert len(http.calls) == 0
+    assert auth.calls == []
+
+
+@pytest.mark.parametrize("value", ["", "   ", "\t\n"])
+def test_blank_env_var_counts_as_missing(monkeypatch, http, value):
+    monkeypatch.setenv(api.ENV_VAR_SUBSCRIPTION_KEY, value)
+    with pytest.raises(SubscriptionKeyError):
+        pdm.ping()
+    assert len(http.calls) == 0
+
+
+def test_env_var_key_is_sent_stripped(monkeypatch, http):
+    monkeypatch.setenv(api.ENV_VAR_SUBSCRIPTION_KEY, "  env-key \n")
+    http.get(f"{BASE}/api/Ping", json=PING_OK)
+
+    pdm.ping()
+
+    assert http.calls[0].request.headers[api.SUBSCRIPTION_KEY_HEADER] == "env-key"
 
 
 def test_set_subscription_key_wins_over_env_var(monkeypatch, http):
@@ -536,122 +624,44 @@ def test_set_subscription_key_wins_over_env_var(monkeypatch, http):
     assert http.calls[0].request.headers[api.SUBSCRIPTION_KEY_HEADER] == "explicit-key"
 
 
-def test_env_var_key_is_used_without_key_vault(monkeypatch, http, vault):
+def test_clearing_set_subscription_key_falls_back_to_env_var(monkeypatch, http):
     monkeypatch.setenv(api.ENV_VAR_SUBSCRIPTION_KEY, "env-key")
+    pdm.set_subscription_key("explicit-key")
+    pdm.set_subscription_key("")
     http.get(f"{BASE}/api/Ping", json=PING_OK)
 
     pdm.ping()
 
-    assert vault_calls(http) == []
     assert http.calls[0].request.headers[api.SUBSCRIPTION_KEY_HEADER] == "env-key"
 
 
-def test_placeholder_vault_url_fails_without_network_or_sign_in(http, auth):
-    with pytest.raises(SubscriptionKeyError, match="No valid Key Vault"):
-        pdm.ping()
-    assert len(http.calls) == 0
-    assert auth.calls == []
-
-
-@pytest.mark.parametrize(
-    "url",
-    [
-        "https://evil.example.com",
-        "http://kv-pdm.vault.azure.net",
-        "https://kv-pdm.vault.azure.net.evil.com",
-        "https://kv-pdm.vault.azure.net/secrets/x",
-    ],
-)
-def test_vault_token_is_never_sent_to_other_hosts(monkeypatch, http, auth, url):
-    monkeypatch.setenv(api.ENV_VAR_KEY_VAULT_URL, url)
-    with pytest.raises(SubscriptionKeyError):
-        pdm.ping()
-    assert len(http.calls) == 0
-    assert api.KEY_VAULT_SCOPE not in auth.scopes()
-
-
-def test_key_is_read_from_vault_once_and_cached(http, vault, auth):
-    http.get(PROD_SECRET_URL, json={"value": "vault-key"})
-    http.get(f"{BASE}/api/Ping", json=PING_OK)
-
-    pdm.ping()
-    pdm.ping()
-
-    (vault_call,) = vault_calls(http)
-    assert ("api-version", api.KEY_VAULT_API_VERSION) in query_params(vault_call)
-    assert vault_call.request.headers["Authorization"] == "Bearer " + auth.token_for(
-        api.KEY_VAULT_SCOPE
-    )
-    assert all(
-        c.request.headers[api.SUBSCRIPTION_KEY_HEADER] == "vault-key"
-        for c in api_calls(http)
-    )
-    assert len(api_calls(http)) == 2
-
-
-def test_test_environment_uses_test_secret(monkeypatch, http, vault):
+def test_same_key_is_sent_for_the_test_environment(monkeypatch, http, key):
     monkeypatch.setenv(api.ENV_VAR_ENVIRONMENT, "test")
-    http.get(TEST_SECRET_URL, json={"value": "test-key"})
     http.get(f"{TEST_BASE}/api/Ping", json=PING_OK)
 
     pdm.ping()
 
-    assert http.calls[0].request.url.startswith(TEST_SECRET_URL)
-    assert http.calls[1].request.headers[api.SUBSCRIPTION_KEY_HEADER] == "test-key"
+    assert http.calls[0].request.url.startswith(TEST_BASE)
+    assert http.calls[0].request.headers[api.SUBSCRIPTION_KEY_HEADER] == key
 
 
-@pytest.mark.parametrize(
-    "response, message",
-    [
-        ({"status": 401, "json": {"error": {}}}, "No access"),
-        ({"status": 403, "json": {"error": {}}}, "No access"),
-        ({"status": 404, "json": {"error": {}}}, "not found"),
-        ({"status": 500, "json": {"message": "boom"}}, "failed"),
-        ({"json": {"id": "x"}}, "no usable value"),
-        ({"json": {"value": "   "}}, "no usable value"),
-        ({"body": "not json"}, "no usable value"),
-        ({"body": requests.ConnectionError("down")}, "Could not reach"),
-    ],
-)
-def test_vault_errors_are_reported(http, vault, response, message):
-    http.get(PROD_SECRET_URL, **response)
-    with pytest.raises(SubscriptionKeyError, match=message):
-        pdm.ping()
-    assert api_calls(http) == []
-
-
-def test_rotated_vault_key_is_refreshed_once(http, vault):
-    api._vault_keys[(VAULT, api.ENVIRONMENTS["prod"].key_vault_secret)] = "old-key"
+def test_rejected_key_is_not_retried(http, key, sleeps):
     http.get(f"{BASE}/api/Ping", **KEY_REJECTED)
-    http.get(f"{BASE}/api/Ping", json=PING_OK)
-    http.get(PROD_SECRET_URL, json={"value": "new-key"})
-
-    assert pdm.ping() == PING_OK
-
-    sent = [c.request.headers[api.SUBSCRIPTION_KEY_HEADER] for c in api_calls(http)]
-    assert sent == ["old-key", "new-key"]
-    assert len(vault_calls(http)) == 1
-
-
-def test_vault_key_rejected_after_refresh_gives_up(http, vault):
-    api._vault_keys[(VAULT, api.ENVIRONMENTS["prod"].key_vault_secret)] = "old-key"
-    http.get(f"{BASE}/api/Ping", **KEY_REJECTED)
-    http.get(PROD_SECRET_URL, json={"value": "new-key"})
 
     with pytest.raises(SubscriptionKeyError) as err:
         pdm.ping()
 
-    assert len(api_calls(http)) == 2
-    assert len(vault_calls(http)) == 1
-    assert "old-key" not in str(err.value) and "new-key" not in str(err.value)
+    assert len(http.calls) == 1
+    assert sleeps == []
+    assert api.ENV_VAR_SUBSCRIPTION_KEY in str(err.value)
+    assert key not in str(err.value)
 
 
-def test_rejected_override_key_is_not_refreshed_from_vault(http, key, vault):
-    http.get(f"{BASE}/api/Ping", **KEY_REJECTED)
-    with pytest.raises(SubscriptionKeyError):
-        pdm.ping()
-    assert len(api_calls(http)) == 1
-    assert vault_calls(http) == []
+def test_no_key_vault_remnants():
+    # Key Vault support was removed; make sure it doesn't come back unnoticed.
+    for name in ("KEY_VAULT_URL", "ENV_VAR_KEY_VAULT_URL", "_get_key_from_vault"):
+        assert not hasattr(api, name)
+    assert "key_vault_secret" not in api.ApiEnvironment.__dataclass_fields__
 
 
 # ---------------------------------------------------------------------------
@@ -707,9 +717,35 @@ def test_connection_error_is_retried(http, key, sleeps):
 def test_connection_error_gives_up_after_max_retries(http, key, sleeps):
     http.get(f"{BASE}/api/Ping", body=requests.ConnectionError("down"))
 
-    with pytest.raises(PdmApiError, match="Could not connect"):
+    with pytest.raises(PdmApiError, match="Could not connect") as err:
         pdm.ping()
+    # A plain connection failure is not a timeout.
+    assert type(err.value) is PdmApiError
     assert len(http.calls) == api._MAX_RETRIES + 1
+
+
+def test_connect_timeout_is_retried_then_succeeds(http, key, sleeps):
+    http.get(f"{BASE}/api/Ping", body=requests.ConnectTimeout("connect timed out"))
+    http.get(f"{BASE}/api/Ping", json=PING_OK)
+
+    assert pdm.ping() == PING_OK
+    assert len(http.calls) == 2
+    assert sleeps == [1.0]
+
+
+def test_connect_timeout_gives_up_with_timeout_error(http, key, sleeps):
+    # ConnectTimeout is a ConnectionError, not a ReadTimeout, but callers
+    # catching PdmTimeoutError must still see it as a timeout.
+    http.get(f"{BASE}/api/Ping", body=requests.ConnectTimeout("connect timed out"))
+
+    with pytest.raises(PdmTimeoutError) as err:
+        pdm.ping()
+
+    assert type(err.value) is PdmTimeoutError
+    assert "Could not connect" in str(err.value)
+    assert f"{api._CONNECT_TIMEOUT_SECONDS:g} s" in str(err.value)
+    assert len(http.calls) == api._MAX_RETRIES + 1
+    assert sleeps == [1.0, 2.0, 4.0]
 
 
 def test_read_timeout_is_not_retried(http, key, sleeps):
@@ -719,6 +755,52 @@ def test_read_timeout_is_not_retried(http, key, sleeps):
         pdm.ping(timeout=5)
     assert len(http.calls) == 1
     assert sleeps == []
+
+
+# ---------------------------------------------------------------------------
+# Redirects are never followed (credentials must stay on the gateway)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("status", [301, 302, 303, 307, 308])
+@pytest.mark.parametrize(
+    "location", [OTHER_HOST, f"{BASE}/api/Elsewhere"], ids=["other-host", "same-host"]
+)
+def test_redirect_is_not_followed(http, key, sleeps, status, location):
+    http.get(f"{BASE}/api/Ping", status=status, headers={"Location": location})
+    http.get(OTHER_HOST, json={})
+    http.get(f"{BASE}/api/Elsewhere", json=PING_OK)
+
+    with pytest.raises(PdmApiError) as err:
+        pdm.ping()
+
+    assert type(err.value) is PdmApiError
+    assert err.value.status_code == status
+    assert location in str(err.value)
+    assert len(http.calls) == 1
+    assert sleeps == []
+
+
+def test_redirect_does_not_send_credentials_to_other_host(http, auth):
+    pdm.set_subscription_key(SENTINEL_KEY)
+    pdm.set_api_token(SENTINEL_TOKEN)
+    http.get(f"{BASE}/api/flex/View", status=302, headers={"Location": OTHER_HOST})
+    http.get(OTHER_HOST, json=[])
+
+    with pytest.raises(PdmApiError) as err:
+        pdm.read_api_view("View")
+
+    assert all(not c.request.url.startswith(OTHER_HOST) for c in http.calls)
+    for secret in (SENTINEL_KEY, SENTINEL_TOKEN):
+        assert secret not in str(err.value)
+
+
+def test_redirect_without_location_header(http, key):
+    http.get(f"{BASE}/api/Ping", status=302)
+
+    with pytest.raises(PdmApiError, match="unknown location") as err:
+        pdm.ping()
+    assert err.value.status_code == 302
 
 
 @pytest.mark.parametrize(
@@ -783,9 +865,6 @@ def test_both_error_formats_are_parsed(http, key, body, message, trace_id):
 # Secrets never leak into errors or verbose output
 # ---------------------------------------------------------------------------
 
-SENTINEL_TOKEN = "sentinel-token-that-must-not-appear"
-SENTINEL_KEY = "sentinel-key-that-must-not-appear"
-
 
 @pytest.mark.parametrize(
     "response",
@@ -793,8 +872,19 @@ SENTINEL_KEY = "sentinel-key-that-must-not-appear"
         KEY_REJECTED,
         TOKEN_REJECTED,
         {"status": 500, "json": {"message": "boom"}},
+        {"status": 302, "headers": {"Location": OTHER_HOST}},
         {"body": requests.ConnectionError("down")},
+        {"body": requests.ConnectTimeout("connect timed out")},
         {"body": requests.ReadTimeout("slow")},
+    ],
+    ids=[
+        "key-rejected",
+        "token-rejected",
+        "server-error",
+        "redirect",
+        "connection-error",
+        "connect-timeout",
+        "read-timeout",
     ],
 )
 def test_credentials_do_not_appear_in_errors_or_output(http, capsys, response):

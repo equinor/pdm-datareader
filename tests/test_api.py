@@ -12,6 +12,7 @@ import json
 from decimal import Decimal
 from email.utils import format_datetime
 from types import SimpleNamespace
+from typing import Any
 from urllib.parse import parse_qsl, urlsplit
 
 import numpy as np
@@ -56,10 +57,17 @@ TOKEN_REJECTED = dict(
 PING_OK = {"version": "3.0", "databaseCheckPassed": True}
 
 
-def fake_jwt(**claims) -> str:
-    """Build an unsigned JWT-shaped string carrying ``claims``."""
+def fake_jwt(**claims: Any) -> str:
+    """Build an unsigned JWT-shaped token.
 
-    def enc(data: dict) -> str:
+    Args:
+        claims: Values to include in the token payload.
+
+    Returns:
+        An unsigned JWT-shaped string carrying the provided claims.
+    """
+
+    def enc(data: dict[str, Any]) -> str:
         raw = json.dumps(data).encode()
         return base64.urlsafe_b64encode(raw).rstrip(b"=").decode()
 
@@ -67,13 +75,37 @@ def fake_jwt(**claims) -> str:
 
 
 class FakeAuth:
-    """Records token requests and returns fake JWTs instead of calling Azure AD."""
+    """Fake Azure AD auth provider for isolated API tests.
 
-    def __init__(self):
-        self.calls = []
-        self.upn = FAKE_UPN
+    Attributes:
+        calls: Token request details recorded by the fake.
+        upn: User principal name embedded in generated tokens.
+    """
 
-    def get_auth(self, tenantID, clientID, scopes, username="", **kwargs):
+    def __init__(self) -> None:
+        self.calls: list[SimpleNamespace] = []
+        self.upn: str = FAKE_UPN
+
+    def get_auth(
+        self,
+        tenantID: str,
+        clientID: str,
+        scopes: list[str],
+        username: str = "",
+        **kwargs: Any,
+    ) -> SimpleNamespace:
+        """Record an auth request and return a fake token.
+
+        Args:
+            tenantID: Tenant identifier supplied by the API client.
+            clientID: Client identifier supplied by the API client.
+            scopes: Token scopes requested by the client.
+            username: Optional account name requested by the client.
+            kwargs: Additional auth options accepted by the fake.
+
+        Returns:
+            A namespace containing the generated token.
+        """
         self.calls.append(
             SimpleNamespace(
                 tenant=tenantID, client_id=clientID, scope=scopes[0], username=username
@@ -82,15 +114,32 @@ class FakeAuth:
         return SimpleNamespace(token=self.token_for(scopes[0]))
 
     def token_for(self, scope: str) -> str:
+        """Build a fake token for a scope.
+
+        Args:
+            scope: Audience to embed in the token payload.
+
+        Returns:
+            An unsigned JWT-shaped string.
+        """
         return fake_jwt(upn=self.upn, aud=scope)
 
-    def scopes(self):
+    def scopes(self) -> list[str]:
+        """Return scopes from recorded auth requests.
+
+        Returns:
+            Scopes in the order they were requested.
+        """
         return [c.scope for c in self.calls]
 
 
 @pytest.fixture(autouse=True)
 def isolated(monkeypatch):
-    """Reset module state, block network and fake auth for every test."""
+    """Isolate API environment and module state for each test.
+
+    Yields:
+        None. State is reset both before and after the test.
+    """
     for name in (
         api.ENV_VAR_ENVIRONMENT,
         api.ENV_VAR_BASE_URL,
@@ -110,6 +159,11 @@ def isolated(monkeypatch):
 
 @pytest.fixture(autouse=True)
 def auth(monkeypatch):
+    """Replace Azure AD authentication with a recording fake.
+
+    Returns:
+        The fake auth provider installed for this test.
+    """
     fake = FakeAuth()
     monkeypatch.setattr(
         api, "BearerAuth", SimpleNamespace(get_auth=fake.get_auth), raising=True
@@ -119,30 +173,48 @@ def auth(monkeypatch):
 
 @pytest.fixture(autouse=True)
 def http():
+    """Provide an HTTP mock that prevents live requests.
+
+    Yields:
+        A responses mock for registering and inspecting HTTP calls.
+    """
     with responses.RequestsMock(assert_all_requests_are_fired=False) as rsps:
         yield rsps
 
 
 @pytest.fixture(autouse=True)
 def sleeps(monkeypatch):
-    recorded = []
+    """Record retry delays without waiting.
+
+    Returns:
+        The list populated with requested sleep durations.
+    """
+    recorded: list[float] = []
     monkeypatch.setattr(api.time, "sleep", recorded.append)
     return recorded
 
 
 @pytest.fixture
 def key():
-    """Use an explicit subscription key."""
+    """Configure an explicit subscription key.
+
+    Returns:
+        The configured key.
+    """
     api.set_subscription_key("sub-key-123")
     return "sub-key-123"
 
 
-def query_params(call):
+def query_params(call: Any) -> list[tuple[str, str]]:
+    """Extract decoded query parameter pairs from a captured request.
+
+    Args:
+        call: Captured HTTP call whose URL contains the query string.
+
+    Returns:
+        Query parameter names and values in URL order.
+    """
     return parse_qsl(urlsplit(call.request.url).query, keep_blank_values=True)
-
-
-def api_calls(http):
-    return [c for c in http.calls if c.request.url.startswith(BASE)]
 
 
 # ---------------------------------------------------------------------------
@@ -774,7 +846,7 @@ def test_redirect_is_not_followed(http, key, sleeps, status, location):
     assert sleeps == []
 
 
-def test_redirect_does_not_send_credentials_to_other_host(http, auth):
+def test_redirect_does_not_send_credentials_to_other_host(http):
     pdm.set_subscription_key(SENTINEL_KEY)
     pdm.set_api_token(SENTINEL_TOKEN)
     http.get(f"{BASE}/api/flex/View", status=302, headers={"Location": OTHER_HOST})

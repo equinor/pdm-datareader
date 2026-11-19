@@ -1,0 +1,186 @@
+name: Move Open Issues to Next Sprint
+
+on:
+  # Run every Thursday at 17:00 UTC
+  schedule:
+    - cron: "0 17 * * 4"
+
+  # Allow manual execution
+  workflow_dispatch: {}
+
+permissions:
+  issues: write
+
+jobs:
+  move-open-issues:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Move open issues from ending sprint to next sprint
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const owner = context.repo.owner;
+            const repo  = context.repo.repo;
+
+            // ---- CONFIG ----
+            const PREFIX = "Sprint-";       // Sprint name pattern: Sprint-123
+            // ----------------
+
+            const titleRegex = new RegExp(`^${PREFIX}(\\d+)$`);
+
+            function utcDateString(d) {
+              return d.toISOString().slice(0, 10);
+            }
+
+            // 1) Fetch all open milestones
+            const milestones = await github.paginate(
+              github.rest.issues.listMilestones,
+              {
+                owner,
+                repo,
+                state: "open",
+                per_page: 100
+              }
+            );
+
+            // 2) Find all Sprint-### milestones sorted by number
+            const sprintMilestones = milestones
+              .map(m => {
+                const match = m.title.match(titleRegex);
+                if (!match) return null;
+                return { ...m, sprintNum: parseInt(match[1], 10) };
+              })
+              .filter(Boolean)
+              .sort((a, b) => a.sprintNum - b.sprintNum);
+
+            if (sprintMilestones.length < 2) {
+              core.notice("Need at least 2 open sprint milestones to move issues. Exiting.");
+              return;
+            }
+
+            // 3) Determine which sprint is ending today
+            // A sprint ends on Thursday — check if today matches any milestone's due date
+            const today = utcDateString(new Date());
+            let endingSprint = null;
+            let nextSprint = null;
+
+            for (let i = 0; i < sprintMilestones.length - 1; i++) {
+              const m = sprintMilestones[i];
+              if (!m.due_on) continue;
+
+              const dueDate = utcDateString(new Date(m.due_on));
+              if (dueDate === today) {
+                endingSprint = m;
+                nextSprint = sprintMilestones[i + 1];
+                break;
+              }
+            }
+
+            if (!endingSprint) {
+              core.notice(`No sprint milestone has a due date matching today (${today}). This is not a sprint-end Thursday. Exiting.`);
+              return;
+            }
+
+            core.info(`Ending sprint: ${endingSprint.title} (due ${today})`);
+            core.info(`Next sprint: ${nextSprint.title}`);
+
+            // 4) Fetch all open issues in the ending sprint
+            const issues = await github.paginate(
+              github.rest.issues.listForRepo,
+              {
+                owner,
+                repo,
+                milestone: endingSprint.number,
+                state: "open",
+                per_page: 100
+              }
+            );
+
+            if (issues.length === 0) {
+              core.notice(`No open issues in ${endingSprint.title}. Nothing to move.`);
+              return;
+            }
+
+            core.info(`Found ${issues.length} open issue(s) in ${endingSprint.title} to move to ${nextSprint.title}.`);
+
+            // 5) Move each open issue to the next sprint milestone
+            let moved = 0;
+            for (const issue of issues) {
+              // Skip pull requests (they also appear in issues API)
+              if (issue.pull_request) continue;
+
+              await github.rest.issues.update({
+                owner,
+                repo,
+                issue_number: issue.number,
+                milestone: nextSprint.number
+              });
+
+              core.info(`Moved issue #${issue.number}: ${issue.title}`);
+              moved++;
+            }
+
+            core.notice(`Moved ${moved} open issue(s) from ${endingSprint.title} to ${nextSprint.title}.`);
+
+      - name: Close overdue sprint milestones
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const owner = context.repo.owner;
+            const repo  = context.repo.repo;
+
+            // ---- CONFIG ----
+            const PREFIX = "Sprint-";       // Sprint name pattern: Sprint-123
+            // ----------------
+
+            const titleRegex = new RegExp(`^${PREFIX}(\\d+)$`);
+
+            function utcDateString(d) {
+              return d.toISOString().slice(0, 10);
+            }
+
+            // 1) Fetch open milestones again, so open_issues reflects the issues moved in the previous step
+            const milestones = await github.paginate(
+              github.rest.issues.listMilestones,
+              {
+                owner,
+                repo,
+                state: "open",
+                per_page: 100
+              }
+            );
+
+            // 2) Find Sprint-### milestones whose due date is today or earlier
+            const today = utcDateString(new Date());
+            const overdueSprints = milestones
+              .filter(m => titleRegex.test(m.title))
+              .filter(m => m.due_on && utcDateString(new Date(m.due_on)) <= today)
+              .sort((a, b) => new Date(a.due_on) - new Date(b.due_on));
+
+            if (overdueSprints.length === 0) {
+              core.notice("No overdue sprint milestones to close.");
+              return;
+            }
+
+            // 3) Close the ones that are empty; leave the rest open so open work stays visible
+            const closed = [];
+            for (const m of overdueSprints) {
+              if (m.open_issues > 0) {
+                core.warning(`${m.title} is overdue but still has ${m.open_issues} open issue(s) or pull request(s). Leaving it open.`);
+                continue;
+              }
+
+              await github.rest.issues.updateMilestone({
+                owner,
+                repo,
+                milestone_number: m.number,
+                state: "closed"
+              });
+
+              core.info(`Closed milestone: ${m.title}`);
+              closed.push(m.title);
+            }
+
+            core.notice(`Closed ${closed.length} overdue sprint milestone(s)${closed.length ? `: ${closed.join(", ")}` : ""}.`);

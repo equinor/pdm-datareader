@@ -25,8 +25,9 @@ jobs:
 
             // ---- CONFIG ----
             const PREFIX = "Sprint-";       // Sprint name pattern: Sprint-123
-            const SPRINT_DAYS = 14;         // 2-week sprints
-            const CREATE_COUNT = 2;         // create next 2 sprints if missing
+            const SPRINT_DAYS = 28;         // 4-week sprints (Fri–Thu)
+            const LOOKAHEAD_DAYS = 2 * SPRINT_DAYS; // keep milestones covering at least this far ahead
+            const MAX_CREATE_PER_RUN = 3;   // safety cap per run
             const CREATE_DUE_DATES = true;  // set milestone due_on
             // ----------------
 
@@ -70,10 +71,8 @@ jobs:
             // 2) Find the highest Sprint-### milestone
             let maxN = 0;
             let lastSprint = null;
-            const existingTitles = new Set();
 
             for (const m of milestones) {
-              existingTitles.add(m.title);
               const match = m.title.match(titleRegex);
               if (!match) continue;
 
@@ -106,20 +105,18 @@ jobs:
 
             core.info(`Next sprint base start (UTC): ${baseNextStart.toISOString()}`);
 
-            // 4) Create next CREATE_COUNT sprints, chained sequentially
+            // 4) Create sprints, chained sequentially, until the last one ends
+            //    at least LOOKAHEAD_DAYS from today
+            const horizon = addDays(utcStartOfDay(new Date()), LOOKAHEAD_DAYS);
             const created = [];
+            let sprintNum = maxN;
+            let sprintStart = baseNextStart;
 
-            for (let i = 1; i <= CREATE_COUNT; i++) {
-              const sprintNum = maxN + i;
+            while (addDays(sprintStart, -1) < horizon && created.length < MAX_CREATE_PER_RUN) {
+              sprintNum++;
               const title = `${PREFIX}${sprintNum}`;
 
-              if (existingTitles.has(title)) {
-                core.info(`Milestone already exists: ${title} (skipping)`);
-                continue;
-              }
-
-              // Sprint starts Friday, ends Thursday (14 days total)
-              const sprintStart = addDays(baseNextStart, (i - 1) * SPRINT_DAYS);
+              // Sprint starts Friday, ends Thursday (SPRINT_DAYS total)
               const sprintEndDate = addDays(sprintStart, SPRINT_DAYS - 1);
               const sprintDue = utcEndOfDay(sprintEndDate);
 
@@ -147,6 +144,8 @@ jobs:
               core.notice(
                 `Created milestone: ${title} (#${res.data.number}) due_on=${payload.due_on}`
               );
+
+              sprintStart = addDays(sprintEndDate, 1);
             }
 
             if (created.length === 0) {

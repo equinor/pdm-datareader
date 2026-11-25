@@ -74,19 +74,20 @@ import pdm_datareader as pdm
 print(pdm.ping())   # e.g. {'version': '3.0', 'databaseCheckPassed': True}
 ```
 
-For example, save the code above as `pdm_check.py`, then run it from its directory using the same Python interpreter used to install the package:
+As an example, you could save the code above as `demo-api-ping.py`, then run it from its directory using the same Python interpreter used to install the package:
 
 ```sh
-python pdm_check.py
+python demo-api-ping.py
 ```
 
-In VS Code, select that interpreter and use **Run Python File** instead if preferred.
+The same example is available in [examples/demo-api-ping.py](examples/demo-api-ping.py).
 
 The first call opens a browser window to sign in with your Equinor account. Later calls reuse the sign-in silently. If you have several Equinor accounts, choose one with `pdm.get_api_token(username="abcd")` (short name or full email address) before your first call.
 
 ### 4. Read data
 ```python
 import datetime as dt
+
 from pdm_datareader import read_api_view, Range
 
 df = read_api_view(
@@ -100,6 +101,8 @@ df = read_api_view(
 )
 print(df)
 ```
+
+This example is also available in [examples/demo-api.py](examples/demo-api.py).
 
 - The first argument is the **view name in the API**, e.g. `WellProdDay` (the SQL view `PDMVW.WELL_PROD_DAY`). Views and their columns are described on the [PDM documentation site](https://pdm-docs.app.radix.equinor.com/user_documentation/views/well_prod_day/).
 - **All matching rows are returned** by default, just like a SQL query without `TOP`. For large views, always use filters and `columns` to limit the result.

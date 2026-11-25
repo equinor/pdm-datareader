@@ -20,26 +20,30 @@ Both handle authentication for end users with user impersonation (sign-in with y
 Pull requests, feature requests and issues are welcomed using the [GitHub Project Repository](https://github.com/equinor/pdm-datareader) or as a ServiceNow ticket directed to Production Data Mart.
 
 ## Install
-1. Ensure that [ODBC Driver for SQL Server](https://learn.microsoft.com/en-us/sql/connect/odbc/download-odbc-driver-for-sql-server) is installed (only needed for [SQL usage](#sql-usage)). Currently supports both v18 and v17.  
-This driver is bundled with the [Microsoft SQL Client](https://accessit.equinor.com/Search/Search?term=MICROSOFT+SQL+CLIENT) package in AccessIT, and should be pre installed on linux environments. Instructions for installing on MacOS can be found [here.](https://learn.microsoft.com/en-us/sql/connect/odbc/download-odbc-driver-for-sql-server).
-2. MacOS users must install unixodbc (only needed for [SQL usage](#sql-usage)). See [https://pypi.org/project/pyodbc/](https://pypi.org/project/pyodbc/) for current instructions.
-3. Linux users must apply for [Linux compliant device exclusion](https://accessit.equinor.com/Search/Search?term=linux+exclusion) to get multifactor authentication to work.
-4. Finally install the latest version of the python package using:  
-    ```pip install pdm-datareader```
+Install the package using the Python interpreter you will use to run your scripts:
 
-## Development
-Install [uv](https://docs.astral.sh/uv/getting-started/installation/) and use Python 3.11–3.14. From the repository root:
-
-```bash
-uv sync 
+```sh
+python -m pip install pdm-datareader
 ```
+
+On macOS or Linux, use `python3` instead of `python` if needed.
+Linux users must apply for [Linux compliant device exclusion](https://accessit.equinor.com/Search/Search?term=linux+exclusion) to get multifactor authentication to work.
+
+### SQL prerequisites
+These are only needed for [SQL usage](#sql-usage), not the API:
+
+- Install [ODBC Driver for SQL Server](https://learn.microsoft.com/en-us/sql/connect/odbc/download-odbc-driver-for-sql-server), version 17 or 18. It is bundled with the [Microsoft SQL Client](https://accessit.equinor.com/Search/Search?term=MICROSOFT+SQL+CLIENT) package in AccessIT and should be pre-installed on Linux environments.
+- macOS users must also install unixODBC. See the [pyodbc installation instructions](https://pypi.org/project/pyodbc/) for details.
 
 ## API usage
 Available from version 2.6.0. The API reads one PDM view at a time and returns it as a pandas DataFrame.
 
 > **Note:** Looking for how to query PDM with SQL directly? See [SQL usage](#sql-usage).
 
-### 1. Get a subscription key
+### 1. Install the package
+Follow the [installation instructions](#install). The API does not need the SQL prerequisites.
+
+### 2. Get a subscription key
 All requests to the PDM API go through a gateway that requires a **subscription key** in addition to your Equinor sign-in. Create your own key in the [Equinor API portal](https://api.equinor.com/product). Make sure it is an "Enterprise" type subscription key.
 
 Your account also needs **PDM data access**: the same field-based roles as for the database, applied for in AccessIT.
@@ -49,6 +53,9 @@ Treat the key like a password: don't put it in notebooks, scripts or git reposit
 ```powershell
 # Windows (PowerShell), for the current user permanently
 [Environment]::SetEnvironmentVariable("PDM_APIM_SUBSCRIPTION_KEY", "<your key>", "User")
+
+# Also make it available in this PowerShell session
+$env:PDM_APIM_SUBSCRIPTION_KEY = [Environment]::GetEnvironmentVariable("PDM_APIM_SUBSCRIPTION_KEY", "User")
 ```
 
 ```bash
@@ -56,18 +63,28 @@ Treat the key like a password: don't put it in notebooks, scripts or git reposit
 export PDM_APIM_SUBSCRIPTION_KEY="<your key>"
 ```
 
-Restart your terminal or IDE afterwards. Alternatively, set it in code from a source of your own with `set_subscription_key(...)`.
+The second Windows command makes the key available in the current terminal. Restart already-running Python processes or notebook kernels. To use the key in other terminals, restart VS Code if it was already open, then open a new terminal. On macOS / Linux, reload your shell configuration or open a new terminal.
 
-### 2. Check the connection
+Alternatively, set it in code from a source of your own with `set_subscription_key(...)`.
+
+### 3. Check the connection
 ```python
 import pdm_datareader as pdm
 
-pdm.ping()          # e.g. {'version': '3.0', 'databaseCheckPassed': True}
+print(pdm.ping())   # e.g. {'version': '3.0', 'databaseCheckPassed': True}
 ```
+
+For example, save the code above as `pdm_check.py`, then run it from its directory using the same Python interpreter used to install the package:
+
+```sh
+python pdm_check.py
+```
+
+In VS Code, select that interpreter and use **Run Python File** instead if preferred.
 
 The first call opens a browser window to sign in with your Equinor account. Later calls reuse the sign-in silently. If you have several Equinor accounts, choose one with `pdm.get_api_token(username="abcd")` (short name or full email address) before your first call.
 
-### 3. Read data
+### 4. Read data
 ```python
 import datetime as dt
 from pdm_datareader import read_api_view, Range
@@ -185,4 +202,11 @@ print(df)
 sql = 'SELECT TOP(1) * FROM PDMVW.WELL_PROD_DAY'
 df = query(sql)
 print(df)
+```
+
+## Development
+For contributors working on the repository, install [uv](https://docs.astral.sh/uv/getting-started/installation/) and use Python 3.11–3.14. From the repository root:
+
+```sh
+uv sync
 ```
